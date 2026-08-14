@@ -1,0 +1,6 @@
+{
+  "name": "KlinaTop",
+  "description": "Smart Attendance for Cleaning Teams - Real-time tracking with GPS, photos, and payroll export.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
