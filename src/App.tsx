@@ -18,7 +18,7 @@ import { RhLoginView } from './components/web/RhLoginView';
 // Mobile Container
 import { MobileAppContainer } from './components/mobile/MobileAppContainer';
 
-// Mock Data
+// Mock Data & Firebase Services
 import {
   initialUsers,
   initialEquipes,
@@ -27,6 +27,15 @@ import {
   initialExportHistory,
 } from './data/mockData';
 import { User, Equipe, Presence, Pointage, PayrollExportHistory } from './types';
+import {
+  initializeDatabaseIfEmpty,
+  subscribeToUsers,
+  subscribeToPointages,
+  subscribeToPresences,
+  subscribeToEquipes,
+  addPointageToFirestore,
+  registerUserInFirestore,
+} from './lib/firestoreService';
 
 export default function App() {
   const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>('web');
@@ -54,6 +63,46 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Synchronisation en temps réel avec Firebase Cloud Firestore
+  useEffect(() => {
+    initializeDatabaseIfEmpty();
+
+    const unsubUsers = subscribeToUsers((firestoreUsers) => {
+      if (firestoreUsers.length > 0) {
+        setUsers(firestoreUsers);
+        setSelectedAgent((curr) => {
+          const match = firestoreUsers.find((u) => u.id === curr.id);
+          return match || firestoreUsers[0] || curr;
+        });
+      }
+    });
+
+    const unsubPointages = subscribeToPointages((firestorePointages) => {
+      if (firestorePointages.length > 0) {
+        setPointages(firestorePointages);
+      }
+    });
+
+    const unsubPresences = subscribeToPresences((firestorePresences) => {
+      if (firestorePresences.length > 0) {
+        setPresences(firestorePresences);
+      }
+    });
+
+    const unsubEquipes = subscribeToEquipes((firestoreEquipes) => {
+      if (firestoreEquipes.length > 0) {
+        setEquipes(firestoreEquipes);
+      }
+    });
+
+    return () => {
+      unsubUsers();
+      unsubPointages();
+      unsubPresences();
+      unsubEquipes();
+    };
+  }, []);
+
   // Web Navigation Tab
   const [activeWebTab, setActiveWebTab] = useState<WebTab>('dashboard');
 
@@ -76,7 +125,7 @@ export default function App() {
   const [photoCaptured, setPhotoCaptured] = useState<string | null>(null);
 
   // Check-In Action handler from Field Agent Mobile App
-  const handlePerformCheckIn = (photoUrl: string, address: string) => {
+  const handlePerformCheckIn = async (photoUrl: string, address: string) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
@@ -86,7 +135,7 @@ export default function App() {
       userId: selectedAgent.id,
       userName: selectedAgent.nom,
       userPoste: selectedAgent.poste,
-      equipeNom: selectedAgent.equipeNom,
+      equipeNom: (selectedAgent as any).equipeNom || (selectedAgent as any).equipe || 'Équipe Générale',
       type: 'check-in',
       timestamp: now.toISOString(),
       formattedTime: timeStr,
@@ -98,20 +147,23 @@ export default function App() {
       photoUrl,
     };
 
-    // Update pointages feed
+    // Mise à jour locale immédiate
     setPointages((prev) => [newPointage, ...prev]);
 
-    // Update presence sheet
+    const presenceUpdate: Partial<Presence> = {
+      heureCheckin: timeStr,
+      adresseCheckin: address,
+      photoCheckinUrl: photoUrl,
+      statut: 'en_poste',
+    };
+
     setPresences((prev) => {
       const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
       if (existingIndex >= 0) {
         const updated = [...prev];
         updated[existingIndex] = {
           ...updated[existingIndex],
-          heureCheckin: timeStr,
-          adresseCheckin: address,
-          photoCheckinUrl: photoUrl,
-          statut: 'en_poste',
+          ...presenceUpdate,
         };
         return updated;
       } else {
@@ -119,9 +171,9 @@ export default function App() {
           id: `prs-${Date.now()}`,
           userId: selectedAgent.id,
           userName: selectedAgent.nom,
-          userPhoto: selectedAgent.photoUrl,
+          userPhoto: (selectedAgent as any).photoUrl || selectedAgent.photo,
           userPoste: selectedAgent.poste,
-          equipeNom: selectedAgent.equipeNom,
+          equipeNom: (selectedAgent as any).equipeNom || (selectedAgent as any).equipe || 'Équipe Générale',
           date: dateStr,
           heureCheckin: timeStr,
           adresseCheckin: address,
@@ -138,10 +190,17 @@ export default function App() {
     setIsCheckedIn(true);
     setCheckInTime(timeStr);
     setPhotoCaptured(null);
+
+    // Envoi en direct dans Firebase Firestore
+    try {
+      await addPointageToFirestore(newPointage, presenceUpdate);
+    } catch (err) {
+      console.error('Erreur enregistrement check-in Firestore:', err);
+    }
   };
 
   // Check-Out Action handler from Field Agent Mobile App
-  const handlePerformCheckOut = (photoUrl: string) => {
+  const handlePerformCheckOut = async (photoUrl: string) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
@@ -151,7 +210,7 @@ export default function App() {
       userId: selectedAgent.id,
       userName: selectedAgent.nom,
       userPoste: selectedAgent.poste,
-      equipeNom: selectedAgent.equipeNom,
+      equipeNom: (selectedAgent as any).equipeNom || (selectedAgent as any).equipe || 'Équipe Générale',
       type: 'check-out',
       timestamp: now.toISOString(),
       formattedTime: timeStr,
@@ -165,16 +224,20 @@ export default function App() {
 
     setPointages((prev) => [newPointage, ...prev]);
 
+    const presenceUpdate: Partial<Presence> = {
+      heureCheckout: timeStr,
+      photoCheckoutUrl: photoUrl,
+      duree: '8h 15m',
+      statut: 'présent',
+    };
+
     setPresences((prev) => {
       const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
       if (existingIndex >= 0) {
         const updated = [...prev];
         updated[existingIndex] = {
           ...updated[existingIndex],
-          heureCheckout: timeStr,
-          photoCheckoutUrl: photoUrl,
-          duree: '8h 15m',
-          statut: 'présent',
+          ...presenceUpdate,
         };
         return updated;
       }
@@ -183,17 +246,38 @@ export default function App() {
 
     setIsCheckedIn(false);
     setPhotoCaptured(null);
+
+    // Envoi en direct dans Firebase Firestore
+    try {
+      await addPointageToFirestore(newPointage, presenceUpdate);
+    } catch (err) {
+      console.error('Erreur enregistrement check-out Firestore:', err);
+    }
   };
 
-  // Employee CRUD handlers
-  const handleAddEmployee = (newEmp: User) => {
+  // Employee CRUD handlers (connectés à Firebase)
+  const handleAddEmployee = async (newEmp: User) => {
     setUsers((prev) => [newEmp, ...prev]);
+    try {
+      await registerUserInFirestore(newEmp);
+    } catch (err) {
+      console.error('Erreur ajout employé Firestore:', err);
+    }
   };
 
-  const handleToggleUserStatus = (userId: string) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, statut: u.statut === 'Actif' ? 'Inactif' : 'Actif' } : u))
+  const handleToggleUserStatus = async (userId: string) => {
+    const updatedUsers = users.map((u) =>
+      u.id === userId ? { ...u, statut: (u.statut === 'Actif' ? 'Inactif' : 'Actif') as any } : u
     );
+    setUsers(updatedUsers);
+    const targetUser = updatedUsers.find((u) => u.id === userId);
+    if (targetUser) {
+      try {
+        await registerUserInFirestore(targetUser);
+      } catch (err) {
+        console.error('Erreur mise à jour statut Firestore:', err);
+      }
+    }
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -218,7 +302,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-gray-900 font-poppins flex flex-col">
-      {/* Top Header Navbar - Only visible on desktop/tablets for preview and role-switching */}
+      {/* Top Header Navbar */}
       {!isSmallScreen && (
         <Navbar
           currentMode={currentMode}
@@ -300,7 +384,7 @@ export default function App() {
           </div>
         )
       ) : (
-        /* Mobile Mode (Edge-to-Edge on real mobile devices, Mockup on desktop) */
+        /* Mobile Mode */
         <main
           className={
             isSmallScreen
@@ -320,7 +404,15 @@ export default function App() {
             onInspectPhoto={(ptg) => setInspectPointage(ptg)}
             isCheckedIn={isCheckedIn}
             checkInTime={checkInTime}
-            onRegisterNewAgent={(newUser) => setUsers((prev) => [newUser, ...prev])}
+            onRegisterNewAgent={async (newUser) => {
+              setUsers((prev) => [newUser, ...prev]);
+              setSelectedAgent(newUser);
+              try {
+                await registerUserInFirestore(newUser);
+              } catch (err) {
+                console.error('Erreur enregistrement agent Firestore:', err);
+              }
+            }}
             onSelectAgent={(agent) => setSelectedAgent(agent)}
             isNativeMobile={isSmallScreen}
           />
