@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Mail, ShieldCheck, ArrowRight, CheckCircle2, User, UserPlus, Key, Briefcase } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, ArrowRight, CheckCircle2, User, UserPlus, Key, Briefcase, KeyRound, AlertCircle } from 'lucide-react';
 import { KlinaTopLogo } from '../common/KlinaTopLogo';
 import { RhAdminUser } from '../../types';
 import { initialAdmins, registerAdminInFirestore } from '../../lib/firestoreService';
@@ -9,10 +9,20 @@ interface RhLoginViewProps {
   availableAdmins?: RhAdminUser[];
 }
 
+// Codes d'autorisation maîtres délivrés par le Directeur Général
+const VALID_DIRECTOR_CODES = [
+  'KLINATOP-2026',
+  'KLINATOP2026',
+  'KT-DIR-2026',
+  'DIR-2026',
+  'KT2026',
+  '2026'
+];
+
 export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availableAdmins = initialAdmins }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
-  // Login Form States (clean by default)
+  // Login Form States (champs vierges par défaut)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -22,7 +32,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPoste, setRegisterPoste] = useState('Responsable des Ressources Humaines');
   const [registerPassword, setRegisterPassword] = useState('');
-  const [companyCode, setCompanyCode] = useState('');
+  const [directorCode, setDirectorCode] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -46,7 +56,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
       if (matched) {
         onLoginSuccess(matched);
       } else {
-        // Create an dynamic authenticated session for this admin
+        // Authentifier le nouvel administrateur
         const newAdminSession: RhAdminUser = {
           id: `adm-${Date.now()}`,
           nom: email.split('@')[0].replace('.', ' ').toUpperCase() || 'Administrateur RH',
@@ -64,19 +74,27 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!registerName.trim() || !registerEmail.trim() || !registerPassword.trim()) {
-      setErrorMsg('Veuillez remplir tous les champs obligatoires.');
+    if (!registerName.trim() || !registerEmail.trim() || !registerPassword.trim() || !directorCode.trim()) {
+      setErrorMsg('Veuillez remplir tous les champs obligatoires, y compris le Code d’Autorisation Directeur.');
+      return;
+    }
+
+    // Vérification du Code d'Autorisation Directeur
+    const cleanCode = directorCode.trim().toUpperCase();
+    if (!VALID_DIRECTOR_CODES.includes(cleanCode)) {
+      setErrorMsg('Code d’autorisation Directeur invalide. Veuillez demander le code d’accès au Directeur Général.');
       return;
     }
 
     setIsLoading(true);
     setErrorMsg('');
 
+    const isDirectorRole = registerPoste.includes('Directeur');
     const newAdmin: RhAdminUser = {
       id: `adm-${Date.now()}`,
       nom: registerName.trim(),
       email: registerEmail.trim().toLowerCase(),
-      role: registerPoste.includes('Directeur') ? 'superadmin' : 'rh',
+      role: isDirectorRole ? 'superadmin' : 'rh',
       poste: registerPoste,
       initiales: registerName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'AD',
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
@@ -89,7 +107,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     }
 
     setIsLoading(false);
-    setSuccessMsg(`Compte Administrateur (${newAdmin.nom}) créé avec succès ! Connexion...`);
+    setSuccessMsg(`Compte Administrateur (${newAdmin.nom}) validé avec succès grâce au Code Directeur ! Connexion...`);
     setTimeout(() => {
       onLoginSuccess(newAdmin);
     }, 800);
@@ -98,7 +116,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
   return (
     <div className="min-h-[calc(100vh-120px)] flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 font-poppins">
       <div className="w-full max-w-md bg-[#1F2937] text-white rounded-2xl shadow-2xl border border-gray-700/80 p-6 sm:p-8 space-y-6">
-        {/* Official KlinaTop Logo Brand Header */}
+        {/* En-tête officiel de la marque KlinaTop */}
         <div className="text-center space-y-2">
           <KlinaTopLogo variant="full" size="md" lightBackground={false} />
           <h2 className="text-xl font-bold tracking-tight text-white mt-2">Espace Administration & RH</h2>
@@ -107,7 +125,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
           </p>
         </div>
 
-        {/* Tab Switcher: Connexion vs Créer un compte */}
+        {/* Sélecteur d'onglets : Connexion vs Créer un compte */}
         <div className="flex rounded-xl bg-gray-900 p-1 border border-gray-700">
           <button
             type="button"
@@ -142,8 +160,9 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs font-medium">
-            {errorMsg}
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs font-medium flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{errorMsg}</span>
           </div>
         )}
 
@@ -155,7 +174,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
         )}
 
         {authMode === 'login' ? (
-          /* LOGIN FORM */
+          /* FORMULAIRE DE CONNEXION */
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-1.5">Adresse Email Administrateur / RH</label>
@@ -166,7 +185,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
-                  placeholder="ex: admin@klinatop.bj ou votre email"
+                  placeholder="ex: direction@klinatop.bj ou votre email"
                   required
                 />
               </div>
@@ -199,7 +218,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
               </label>
               <button
                 type="button"
-                onClick={() => alert('Contactez le support technique KlinaTop pour assistance.')}
+                onClick={() => alert('Contactez le Directeur Général ou le support technique KlinaTop.')}
                 className="text-xs text-emerald-400 hover:underline"
               >
                 Mot de passe oublié ?
@@ -226,7 +245,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
             </button>
           </form>
         ) : (
-          /* REGISTER FORM (Créer un compte Administrateur) */
+          /* FORMULAIRE DE CRÉATION DE COMPTE (AVEC CODE DIRECTEUR REQUIS) */
           <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-1">Nom complet du Responsable</label>
@@ -270,14 +289,14 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                   value={registerEmail}
                   onChange={(e) => setRegisterEmail(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
-                  placeholder="ex: direction@klinatop.bj"
+                  placeholder="ex: contact@klinatop.bj"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">Mot de passe Administrateur</label>
+              <label className="block text-xs font-medium text-gray-300 mb-1">Mot de passe</label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -285,10 +304,29 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                   value={registerPassword}
                   onChange={(e) => setRegisterPassword(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
-                  placeholder="Créer un mot de passe sécurisé"
+                  placeholder="Créer un mot de passe"
                   required
                 />
               </div>
+            </div>
+
+            {/* CODE D'AUTORISATION DIRECTEUR OBLIGATOIRE */}
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl space-y-1.5">
+              <label className="block text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                <KeyRound className="w-4 h-4 text-emerald-400" />
+                <span>Code d'Autorisation Directeur (Requis)</span>
+              </label>
+              <input
+                type="text"
+                value={directorCode}
+                onChange={(e) => setDirectorCode(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white font-mono uppercase tracking-wider placeholder-gray-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all"
+                placeholder="Code fourni par le Directeur (ex: KLINATOP-2026)"
+                required
+              />
+              <p className="text-[10px] text-gray-400">
+                Ce code secret est transmis exclusivement par le Directeur Général pour valider l'accès aux données de gestion et du personnel.
+              </p>
             </div>
 
             <button
@@ -299,40 +337,17 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                  <span>Création du compte...</span>
+                  <span>Validation du code en cours...</span>
                 </span>
               ) : (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  <span>Créer mon Compte Administrateur</span>
+                  <span>Valider & Créer le Compte RH</span>
                 </>
               )}
             </button>
           </form>
         )}
-
-        {/* Existing Quick Profiles Switch */}
-        <div className="pt-3 border-t border-gray-800 text-center">
-          <p className="text-[11px] text-gray-400 mb-2">Comptes Administrateurs enregistrés :</p>
-          <div className="grid grid-cols-2 gap-2">
-            {availableAdmins.slice(0, 2).map((adm) => (
-              <button
-                key={adm.id}
-                type="button"
-                onClick={() => onLoginSuccess(adm)}
-                className="bg-gray-800/80 hover:bg-gray-700 text-left p-2 rounded-xl border border-gray-700 transition-all text-[11px] flex items-center gap-2"
-              >
-                <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-900 shrink-0">
-                  <img src={adm.photoUrl || ''} alt={adm.nom} className="w-full h-full object-cover" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-bold text-white truncate">{adm.nom.split(' ')[0]}</p>
-                  <p className="text-[9px] text-gray-400 truncate">{adm.role === 'superadmin' ? 'Directeur' : 'RH'}</p>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );
