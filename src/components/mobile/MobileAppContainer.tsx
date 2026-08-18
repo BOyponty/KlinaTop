@@ -42,7 +42,21 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   onSelectAgent,
   isNativeMobile = false,
 }) => {
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      const savedId = localStorage.getItem('klinatop_logged_agent_id');
+      if (savedId) {
+        const found = allAgents.find((a) => a.id === savedId);
+        if (found) {
+          if (onSelectAgent) onSelectAgent(found);
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('localStorage error', e);
+    }
+    return false;
+  });
   const [activeTab, setActiveTab] = useState<MobileTab>('home');
   const [subView, setSubView] = useState<'checkin' | 'checkout'>('checkin');
 
@@ -69,12 +83,19 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
         )}
         <MobileLogin
           onLogin={(agent) => {
+            try {
+              localStorage.setItem('klinatop_logged_agent_id', agent.id);
+            } catch (e) {}
             if (onSelectAgent) onSelectAgent(agent);
             setIsLoggedIn(true);
           }}
           onRegisterAgent={(newUser) => {
+            try {
+              localStorage.setItem('klinatop_logged_agent_id', newUser.id);
+            } catch (e) {}
             if (onRegisterNewAgent) onRegisterNewAgent(newUser);
             if (onSelectAgent) onSelectAgent(newUser);
+            setIsLoggedIn(true);
           }}
           availableAgents={allAgents}
         />
@@ -139,6 +160,13 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
                 photoCaptured={photoCaptured}
                 onGoToCheckoutScreen={() => setSubView('checkout')}
                 isCheckedIn={isCheckedIn}
+                onNavigateToProfile={() => setActiveTab('profile')}
+                onLogout={() => {
+                  try {
+                    localStorage.removeItem('klinatop_logged_agent_id');
+                  } catch (e) {}
+                  setIsLoggedIn(false);
+                }}
               />
             ) : (
               <MobileCheckOut
@@ -162,7 +190,15 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
         )}
 
         {activeTab === 'profile' && (
-          <MobileProfile agent={currentAgent} onLogout={() => setIsLoggedIn(false)} />
+          <MobileProfile
+            agent={currentAgent}
+            onLogout={() => {
+              try {
+                localStorage.removeItem('klinatop_logged_agent_id');
+              } catch (e) {}
+              setIsLoggedIn(false);
+            }}
+          />
         )}
       </div>
 

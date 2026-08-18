@@ -9,6 +9,8 @@ interface MobileCheckInProps {
   photoCaptured: string | null;
   onGoToCheckoutScreen: () => void;
   isCheckedIn: boolean;
+  onLogout?: () => void;
+  onNavigateToProfile?: () => void;
 }
 
 export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
@@ -18,6 +20,8 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
   photoCaptured,
   onGoToCheckoutScreen,
   isCheckedIn,
+  onLogout,
+  onNavigateToProfile,
 }) => {
   const [currentTime, setCurrentTime] = useState('');
   const [currentDate, setCurrentDate] = useState('');
@@ -68,9 +72,15 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
           <h2 className="text-xl font-bold text-gray-900 leading-tight">Bonjour, {firstName} 👋</h2>
           <p className="text-xs text-gray-500 capitalize">{currentDate}</p>
         </div>
-        <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#0F9D58] shadow-xs">
-          <img src={agent.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'} alt={agent.nom} className="w-full h-full object-cover" />
-        </div>
+        <button
+          onClick={onNavigateToProfile || onLogout}
+          title="Mon profil & Déconnexion"
+          className="flex items-center gap-1.5 p-1 rounded-full hover:bg-gray-100 transition-all cursor-pointer border border-transparent hover:border-gray-200"
+        >
+          <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#0F9D58] shadow-xs">
+            <img src={agent.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'} alt={agent.nom} className="w-full h-full object-cover" />
+          </div>
+        </button>
       </div>
 
       {/* Already Checked-in Alert */}
