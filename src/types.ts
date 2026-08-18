@@ -1,4 +1,15 @@
-export type UserRole = 'admin' | 'rh' | 'agent';
+export type UserRole = 'admin' | 'rh' | 'agent' | 'superadmin' | 'manager';
+
+export interface RhAdminUser {
+  id: string;
+  nom: string;
+  email: string;
+  telephone?: string;
+  role: 'admin' | 'rh' | 'superadmin' | 'manager';
+  poste: string;
+  photoUrl?: string;
+  initiales?: string;
+}
 
 export type EmployeeStatus = 'Actif' | 'Inactif';
 
