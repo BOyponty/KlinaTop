@@ -18,7 +18,7 @@ import { RhLoginView } from './components/web/RhLoginView';
 // Mobile Container
 import { MobileAppContainer } from './components/mobile/MobileAppContainer';
 
-// Mock Data & Firebase Services
+// Mock Data & Firestore synchronization
 import {
   initialUsers,
   initialEquipes,
@@ -26,20 +26,44 @@ import {
   initialPointages,
   initialExportHistory,
 } from './data/mockData';
-import { User, Equipe, Presence, Pointage, PayrollExportHistory } from './types';
+import { User, Equipe, Presence, Pointage, PayrollExportHistory, RhAdminUser } from './types';
 import {
   initializeDatabaseIfEmpty,
   subscribeToUsers,
   subscribeToPointages,
   subscribeToPresences,
   subscribeToEquipes,
+  subscribeToAdmins,
+  initialAdmins,
   addPointageToFirestore,
   registerUserInFirestore,
 } from './lib/firestoreService';
 
 export default function App() {
   const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>('web');
-  const [isRhAuthenticated, setIsRhAuthenticated] = useState<boolean>(true);
+  
+  // RH Administrator multi-user state with localStorage persistence
+  const [admins, setAdmins] = useState<RhAdminUser[]>(initialAdmins);
+  const [currentAdmin, setCurrentAdmin] = useState<RhAdminUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('klinatop_logged_rh_user');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error('Error reading RH user from localStorage', e);
+    }
+    return null;
+  });
+
+  const [isRhAuthenticated, setIsRhAuthenticated] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('klinatop_logged_rh_user');
+      return !!saved;
+    } catch {
+      return false;
+    }
+  });
 
   // Responsive mobile device detection
   const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
@@ -63,13 +87,14 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Synchronisation en temps réel avec Firebase Cloud Firestore
+  // Initialize Firestore listeners & initial seeding
   useEffect(() => {
     initializeDatabaseIfEmpty();
 
     const unsubUsers = subscribeToUsers((firestoreUsers) => {
       if (firestoreUsers.length > 0) {
         setUsers(firestoreUsers);
+        // keep selected agent in sync if found
         setSelectedAgent((curr) => {
           const match = firestoreUsers.find((u) => u.id === curr.id);
           return match || firestoreUsers[0] || curr;
@@ -95,11 +120,24 @@ export default function App() {
       }
     });
 
+    const unsubAdmins = subscribeToAdmins((firestoreAdmins) => {
+      if (firestoreAdmins.length > 0) {
+        setAdmins(firestoreAdmins);
+        // Update currentAdmin if matching
+        setCurrentAdmin((curr) => {
+          if (!curr) return null;
+          const match = firestoreAdmins.find((a) => a.id === curr.id || a.email.toLowerCase() === curr.email.toLowerCase());
+          return match || curr;
+        });
+      }
+    });
+
     return () => {
       unsubUsers();
       unsubPointages();
       unsubPresences();
       unsubEquipes();
+      unsubAdmins();
     };
   }, []);
 
@@ -135,7 +173,7 @@ export default function App() {
       userId: selectedAgent.id,
       userName: selectedAgent.nom,
       userPoste: selectedAgent.poste,
-      equipeNom: (selectedAgent as any).equipeNom || (selectedAgent as any).equipe || 'Équipe Générale',
+      equipeNom: selectedAgent.equipeNom,
       type: 'check-in',
       timestamp: now.toISOString(),
       formattedTime: timeStr,
@@ -147,7 +185,7 @@ export default function App() {
       photoUrl,
     };
 
-    // Mise à jour locale immédiate
+    // Optimistic UI update
     setPointages((prev) => [newPointage, ...prev]);
 
     const presenceUpdate: Partial<Presence> = {
@@ -155,8 +193,10 @@ export default function App() {
       adresseCheckin: address,
       photoCheckinUrl: photoUrl,
       statut: 'en_poste',
+      duree: 'En cours',
     };
 
+    // Update presence sheet locally
     setPresences((prev) => {
       const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
       if (existingIndex >= 0) {
@@ -171,9 +211,9 @@ export default function App() {
           id: `prs-${Date.now()}`,
           userId: selectedAgent.id,
           userName: selectedAgent.nom,
-          userPhoto: (selectedAgent as any).photoUrl || selectedAgent.photo,
+          userPhoto: selectedAgent.photoUrl,
           userPoste: selectedAgent.poste,
-          equipeNom: (selectedAgent as any).equipeNom || (selectedAgent as any).equipe || 'Équipe Générale',
+          equipeNom: selectedAgent.equipeNom,
           date: dateStr,
           heureCheckin: timeStr,
           adresseCheckin: address,
@@ -191,11 +231,11 @@ export default function App() {
     setCheckInTime(timeStr);
     setPhotoCaptured(null);
 
-    // Envoi en direct dans Firebase Firestore
+    // Save to Cloud Firestore
     try {
       await addPointageToFirestore(newPointage, presenceUpdate);
     } catch (err) {
-      console.error('Erreur enregistrement check-in Firestore:', err);
+      console.error('Error syncing check-in with Cloud Firestore:', err);
     }
   };
 
@@ -210,7 +250,7 @@ export default function App() {
       userId: selectedAgent.id,
       userName: selectedAgent.nom,
       userPoste: selectedAgent.poste,
-      equipeNom: (selectedAgent as any).equipeNom || (selectedAgent as any).equipe || 'Équipe Générale',
+      equipeNom: selectedAgent.equipeNom,
       type: 'check-out',
       timestamp: now.toISOString(),
       formattedTime: timeStr,
@@ -222,6 +262,7 @@ export default function App() {
       photoUrl,
     };
 
+    // Optimistic UI update
     setPointages((prev) => [newPointage, ...prev]);
 
     const presenceUpdate: Partial<Presence> = {
@@ -247,37 +288,35 @@ export default function App() {
     setIsCheckedIn(false);
     setPhotoCaptured(null);
 
-    // Envoi en direct dans Firebase Firestore
+    // Save to Cloud Firestore
     try {
       await addPointageToFirestore(newPointage, presenceUpdate);
     } catch (err) {
-      console.error('Erreur enregistrement check-out Firestore:', err);
+      console.error('Error syncing check-out with Cloud Firestore:', err);
     }
   };
 
-  // Employee CRUD handlers (connectés à Firebase)
+  // Employee CRUD handlers
   const handleAddEmployee = async (newEmp: User) => {
     setUsers((prev) => [newEmp, ...prev]);
     try {
       await registerUserInFirestore(newEmp);
     } catch (err) {
-      console.error('Erreur ajout employé Firestore:', err);
+      console.error('Error adding user to Firestore:', err);
     }
   };
 
   const handleToggleUserStatus = async (userId: string) => {
-    const updatedUsers = users.map((u) =>
-      u.id === userId ? { ...u, statut: (u.statut === 'Actif' ? 'Inactif' : 'Actif') as any } : u
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          const updated = { ...u, statut: (u.statut === 'Actif' ? 'Inactif' : 'Actif') as any };
+          registerUserInFirestore(updated).catch(console.error);
+          return updated;
+        }
+        return u;
+      })
     );
-    setUsers(updatedUsers);
-    const targetUser = updatedUsers.find((u) => u.id === userId);
-    if (targetUser) {
-      try {
-        await registerUserInFirestore(targetUser);
-      } catch (err) {
-        console.error('Erreur mise à jour statut Firestore:', err);
-      }
-    }
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -297,12 +336,28 @@ export default function App() {
   };
 
   const handleLogoutRH = () => {
+    try {
+      localStorage.removeItem('klinatop_logged_rh_user');
+    } catch (e) {
+      console.error(e);
+    }
+    setCurrentAdmin(null);
     setIsRhAuthenticated(false);
+  };
+
+  const handleRhLoginSuccess = (admin: RhAdminUser) => {
+    try {
+      localStorage.setItem('klinatop_logged_rh_user', JSON.stringify(admin));
+    } catch (e) {
+      console.error(e);
+    }
+    setCurrentAdmin(admin);
+    setIsRhAuthenticated(true);
   };
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-gray-900 font-poppins flex flex-col">
-      {/* Top Header Navbar */}
+      {/* Top Header Navbar - Only visible on desktop/tablets for preview and role-switching */}
       {!isSmallScreen && (
         <Navbar
           currentMode={currentMode}
@@ -313,13 +368,17 @@ export default function App() {
           onResetData={handleResetData}
           onLogoutRH={handleLogoutRH}
           isRhAuthenticated={isRhAuthenticated}
+          currentAdmin={currentAdmin}
         />
       )}
 
       {/* Main Mode Renderer */}
       {currentMode === 'web' && !isSmallScreen ? (
         !isRhAuthenticated ? (
-          <RhLoginView onLoginSuccess={() => setIsRhAuthenticated(true)} />
+          <RhLoginView
+            onLoginSuccess={handleRhLoginSuccess}
+            availableAdmins={admins}
+          />
         ) : (
           <div className="flex flex-1">
             {/* Web Dashboard Left Sidebar */}
@@ -384,7 +443,7 @@ export default function App() {
           </div>
         )
       ) : (
-        /* Mobile Mode */
+        /* Mobile Mode (Edge-to-Edge on real mobile devices, Mockup on desktop) */
         <main
           className={
             isSmallScreen
@@ -410,7 +469,7 @@ export default function App() {
               try {
                 await registerUserInFirestore(newUser);
               } catch (err) {
-                console.error('Erreur enregistrement agent Firestore:', err);
+                console.error('Error saving registered agent to Firestore:', err);
               }
             }}
             onSelectAgent={(agent) => setSelectedAgent(agent)}
