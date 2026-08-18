@@ -22,7 +22,7 @@ const VALID_DIRECTOR_CODES = [
 export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availableAdmins = initialAdmins }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
-  // Login Form States (champs vierges par défaut)
+  // Login Form States
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -41,7 +41,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
-      setErrorMsg('Veuillez renseigner votre email et mot de passe RH.');
+      setErrorMsg('Veuillez renseigner votre email et votre mot de passe administrateur.');
       return;
     }
 
@@ -51,31 +51,41 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     setTimeout(() => {
       setIsLoading(false);
       const cleanEmail = email.trim().toLowerCase();
+      const enteredPassword = password.trim();
+
+      // Rechercher le compte administrateur enregistré
       const matched = availableAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
 
-      if (matched) {
-        onLoginSuccess(matched);
-      } else {
-        // Authentifier le nouvel administrateur
-        const newAdminSession: RhAdminUser = {
-          id: `adm-${Date.now()}`,
-          nom: email.split('@')[0].replace('.', ' ').toUpperCase() || 'Administrateur RH',
-          email: cleanEmail,
-          role: 'rh',
-          poste: 'Responsable RH / Manager',
-          initiales: email.slice(0, 2).toUpperCase(),
-          photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-        };
-        registerAdminInFirestore(newAdminSession).catch(console.error);
-        onLoginSuccess(newAdminSession);
+      if (!matched) {
+        setErrorMsg(
+          "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
+        );
+        return;
       }
-    }, 600);
+
+      // Vérifier le mot de passe
+      if (matched.motDePasse && matched.motDePasse !== enteredPassword) {
+        setErrorMsg('Mot de passe incorrect pour cet administrateur. Veuillez vérifier vos identifiants.');
+        return;
+      }
+
+      onLoginSuccess(matched);
+    }, 500);
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registerName.trim() || !registerEmail.trim() || !registerPassword.trim() || !directorCode.trim()) {
       setErrorMsg('Veuillez remplir tous les champs obligatoires, y compris le Code d’Autorisation Directeur.');
+      return;
+    }
+
+    const cleanEmail = registerEmail.trim().toLowerCase();
+
+    // Vérifier si un compte existe déjà avec cet email
+    const existing = availableAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      setErrorMsg('Un compte Administrateur existe déjà avec cette adresse email. Veuillez vous connecter.');
       return;
     }
 
@@ -93,11 +103,12 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     const newAdmin: RhAdminUser = {
       id: `adm-${Date.now()}`,
       nom: registerName.trim(),
-      email: registerEmail.trim().toLowerCase(),
+      email: cleanEmail,
       role: isDirectorRole ? 'superadmin' : 'rh',
       poste: registerPoste,
       initiales: registerName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'AD',
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+      motDePasse: registerPassword.trim(),
     };
 
     try {
@@ -107,10 +118,10 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     }
 
     setIsLoading(false);
-    setSuccessMsg(`Compte Administrateur (${newAdmin.nom}) validé avec succès grâce au Code Directeur ! Connexion...`);
+    setSuccessMsg(`Compte Administrateur (${newAdmin.nom}) créé avec succès ! Connexion...`);
     setTimeout(() => {
       onLoginSuccess(newAdmin);
-    }, 800);
+    }, 700);
   };
 
   return (
@@ -174,7 +185,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
         )}
 
         {authMode === 'login' ? (
-          /* FORMULAIRE DE CONNEXION */
+          /* FORMULAIRE DE CONNEXION SÉCURISÉ */
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-1.5">Adresse Email Administrateur / RH</label>
@@ -233,7 +244,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                  <span>Connexion en cours...</span>
+                  <span>Vérification des accès...</span>
                 </span>
               ) : (
                 <>
@@ -325,7 +336,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                 required
               />
               <p className="text-[10px] text-gray-400">
-                Ce code secret est transmis exclusivement par le Directeur Général pour valider l'accès aux données de gestion et du personnel.
+                Ce code secret est transmis exclusivement par le Directeur Général pour valider l'accès aux données de paie et du personnel.
               </p>
             </div>
 
