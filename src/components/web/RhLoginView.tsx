@@ -1,22 +1,26 @@
 import React, { useState } from 'react';
-import { Lock, Mail, ShieldCheck, ArrowRight, CheckCircle2, User, UserPlus, Key } from 'lucide-react';
+import { Lock, Mail, ShieldCheck, ArrowRight, CheckCircle2, User, UserPlus, Key, Briefcase } from 'lucide-react';
 import { KlinaTopLogo } from '../common/KlinaTopLogo';
+import { RhAdminUser } from '../../types';
+import { initialAdmins, registerAdminInFirestore } from '../../lib/firestoreService';
 
 interface RhLoginViewProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (admin: RhAdminUser) => void;
+  availableAdmins?: RhAdminUser[];
 }
 
-export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
+export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availableAdmins = initialAdmins }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
-  // Login Form States
-  const [email, setEmail] = useState('chantal.zinsou@klinatop.bj');
-  const [password, setPassword] = useState('password123');
+  // Login Form States (clean by default)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
 
   // Register Form States
   const [registerName, setRegisterName] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPoste, setRegisterPoste] = useState('Responsable des Ressources Humaines');
   const [registerPassword, setRegisterPassword] = useState('');
   const [companyCode, setCompanyCode] = useState('');
 
@@ -36,11 +40,29 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
 
     setTimeout(() => {
       setIsLoading(false);
-      onLoginSuccess();
+      const cleanEmail = email.trim().toLowerCase();
+      const matched = availableAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
+
+      if (matched) {
+        onLoginSuccess(matched);
+      } else {
+        // Create an dynamic authenticated session for this admin
+        const newAdminSession: RhAdminUser = {
+          id: `adm-${Date.now()}`,
+          nom: email.split('@')[0].replace('.', ' ').toUpperCase() || 'Administrateur RH',
+          email: cleanEmail,
+          role: 'rh',
+          poste: 'Responsable RH / Manager',
+          initiales: email.slice(0, 2).toUpperCase(),
+          photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+        };
+        registerAdminInFirestore(newAdminSession).catch(console.error);
+        onLoginSuccess(newAdminSession);
+      }
     }, 600);
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!registerName.trim() || !registerEmail.trim() || !registerPassword.trim()) {
       setErrorMsg('Veuillez remplir tous les champs obligatoires.');
@@ -50,13 +72,27 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
     setErrorMsg('');
 
+    const newAdmin: RhAdminUser = {
+      id: `adm-${Date.now()}`,
+      nom: registerName.trim(),
+      email: registerEmail.trim().toLowerCase(),
+      role: registerPoste.includes('Directeur') ? 'superadmin' : 'rh',
+      poste: registerPoste,
+      initiales: registerName.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'AD',
+      photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+    };
+
+    try {
+      await registerAdminInFirestore(newAdmin);
+    } catch (err) {
+      console.warn('Could not save admin in Firestore, fallback to local session', err);
+    }
+
+    setIsLoading(false);
+    setSuccessMsg(`Compte Administrateur (${newAdmin.nom}) créé avec succès ! Connexion...`);
     setTimeout(() => {
-      setIsLoading(false);
-      setSuccessMsg('Compte Administrateur RH créé avec succès ! Connexion automatique...');
-      setTimeout(() => {
-        onLoginSuccess();
-      }, 800);
-    }, 700);
+      onLoginSuccess(newAdmin);
+    }, 800);
   };
 
   return (
@@ -65,9 +101,9 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
         {/* Official KlinaTop Logo Brand Header */}
         <div className="text-center space-y-2">
           <KlinaTopLogo variant="full" size="md" lightBackground={false} />
-          <h2 className="text-xl font-bold tracking-tight text-white mt-2">Espace Responsable RH</h2>
+          <h2 className="text-xl font-bold tracking-tight text-white mt-2">Espace Administration & RH</h2>
           <p className="text-xs text-gray-400">
-            Portail d'administration & gestion des présences <span className="text-emerald-400 font-semibold">KlinaTop</span>
+            Portail de gestion d'entreprise & suivi des équipes <span className="text-emerald-400 font-semibold">KlinaTop</span>
           </p>
         </div>
 
@@ -101,7 +137,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
             }`}
           >
             <UserPlus className="w-4 h-4" />
-            <span>Créer un compte</span>
+            <span>Créer un compte RH</span>
           </button>
         </div>
 
@@ -121,23 +157,8 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
         {authMode === 'login' ? (
           /* LOGIN FORM */
           <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {/* Quick HR Profile Card */}
-            <div className="bg-gray-800/80 rounded-xl p-3 border border-gray-700 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#0F9D58] shrink-0 bg-gray-900">
-                <img
-                  src="https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200"
-                  alt="ZINSOU Chantal"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <p className="text-xs font-bold text-white truncate">ZINSOU Chantal</p>
-                <p className="text-[11px] text-emerald-400 font-medium">Responsable RH Principale</p>
-              </div>
-            </div>
-
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">Adresse Email RH</label>
+              <label className="block text-xs font-medium text-gray-300 mb-1.5">Adresse Email Administrateur / RH</label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -145,7 +166,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
-                  placeholder="ex: chantal.zinsou@klinatop.bj"
+                  placeholder="ex: admin@klinatop.bj ou votre email"
                   required
                 />
               </div>
@@ -178,7 +199,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
               </label>
               <button
                 type="button"
-                onClick={() => alert('Contactez le support KlinaTop pour réinitialiser le mot de passe.')}
+                onClick={() => alert('Contactez le support technique KlinaTop pour assistance.')}
                 className="text-xs text-emerald-400 hover:underline"
               >
                 Mot de passe oublié ?
@@ -188,7 +209,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#0F9D58] hover:bg-[#0c8047] active:scale-98 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all text-sm"
+              className="w-full bg-[#0F9D58] hover:bg-[#0c8047] active:scale-98 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all text-sm cursor-pointer"
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
@@ -206,9 +227,9 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
           </form>
         ) : (
           /* REGISTER FORM (Créer un compte Administrateur) */
-          <form onSubmit={handleRegisterSubmit} className="space-y-4">
+          <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">Nom et Prénom de l'Administrateur</label>
+              <label className="block text-xs font-medium text-gray-300 mb-1">Nom complet du Responsable</label>
               <div className="relative">
                 <User className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -216,14 +237,32 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
                   value={registerName}
                   onChange={(e) => setRegisterName(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
-                  placeholder="ex: KOFFI Leond"
+                  placeholder="ex: Koffi Fadou"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">Adresse Email Professionnelle</label>
+              <label className="block text-xs font-medium text-gray-300 mb-1">Rôle / Poste dans l'entreprise</label>
+              <div className="relative">
+                <Briefcase className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <select
+                  value={registerPoste}
+                  onChange={(e) => setRegisterPoste(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#0F9D58] transition-all"
+                >
+                  <option value="Directeur Général & Fondateur">Directeur Général & Fondateur</option>
+                  <option value="Responsable des Ressources Humaines">Responsable des Ressources Humaines</option>
+                  <option value="Superviseur des Opérations Terrain">Superviseur des Opérations Terrain</option>
+                  <option value="Comptable & Gestionnaire de Paie">Comptable & Gestionnaire de Paie</option>
+                  <option value="Chef de Secteur Cotonou">Chef de Secteur Cotonou</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-300 mb-1">Adresse Email Professionnelle</label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -231,14 +270,14 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
                   value={registerEmail}
                   onChange={(e) => setRegisterEmail(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
-                  placeholder="ex: leonkoffifadou2000@gmail.com"
+                  placeholder="ex: direction@klinatop.bj"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">Mot de passe Administrateur</label>
+              <label className="block text-xs font-medium text-gray-300 mb-1">Mot de passe Administrateur</label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -252,24 +291,10 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">Clé / Code d'Organisation KlinaTop (Optionnel)</label>
-              <div className="relative">
-                <Key className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={companyCode}
-                  onChange={(e) => setCompanyCode(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
-                  placeholder="ex: KT-BENIN-2026"
-                />
-              </div>
-            </div>
-
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#0F9D58] hover:bg-[#0c8047] active:scale-98 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all text-sm"
+              className="w-full bg-[#0F9D58] hover:bg-[#0c8047] active:scale-98 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all text-sm cursor-pointer"
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
@@ -279,27 +304,36 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess }) => {
               ) : (
                 <>
                   <UserPlus className="w-4 h-4" />
-                  <span>Créer le Compte Administrateur</span>
+                  <span>Créer mon Compte Administrateur</span>
                 </>
               )}
             </button>
           </form>
         )}
 
-        {/* Quick Demo Login Option */}
-        <div className="pt-2 border-t border-gray-800 text-center">
-          <p className="text-[11px] text-gray-400 mb-2">Mode Démonstration Rapide :</p>
-          <button
-            type="button"
-            onClick={onLoginSuccess}
-            className="w-full bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 font-semibold py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5 text-[#0F9D58]" />
-            <span>Accès immédiat Administrateur RH</span>
-          </button>
+        {/* Existing Quick Profiles Switch */}
+        <div className="pt-3 border-t border-gray-800 text-center">
+          <p className="text-[11px] text-gray-400 mb-2">Comptes Administrateurs enregistrés :</p>
+          <div className="grid grid-cols-2 gap-2">
+            {availableAdmins.slice(0, 2).map((adm) => (
+              <button
+                key={adm.id}
+                type="button"
+                onClick={() => onLoginSuccess(adm)}
+                className="bg-gray-800/80 hover:bg-gray-700 text-left p-2 rounded-xl border border-gray-700 transition-all text-[11px] flex items-center gap-2"
+              >
+                <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-900 shrink-0">
+                  <img src={adm.photoUrl || ''} alt={adm.nom} className="w-full h-full object-cover" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-white truncate">{adm.nom.split(' ')[0]}</p>
+                  <p className="text-[9px] text-gray-400 truncate">{adm.role === 'superadmin' ? 'Directeur' : 'RH'}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 };
-
