@@ -9,6 +9,7 @@ export interface RhAdminUser {
   poste: string;
   photoUrl?: string;
   initiales?: string;
+  motDePasse?: string;
 }
 
 export type EmployeeStatus = 'Actif' | 'Inactif';
