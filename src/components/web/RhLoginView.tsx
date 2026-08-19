@@ -54,42 +54,49 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     setErrorMsg('');
     setSuccessMsg('');
 
-    try {
-      // 1. Recherche dans la liste chargée des administrateurs
-      let targetAdmin: RhAdminUser | undefined = availableAdmins.find(
-        (a) => a.email.toLowerCase() === cleanEmail
-      );
+    // 1. Recherche dans les comptes administrateurs enregistrés
+    const allKnownAdmins = [...availableAdmins, ...initialAdmins];
+    let targetAdmin: RhAdminUser | undefined = allKnownAdmins.find(
+      (a) => a.email && a.email.toLowerCase() === cleanEmail
+    );
 
-      // 2. Si non trouvé en mémoire locale, vérification directe dans Firestore
-      if (!targetAdmin) {
+    // 2. Si pas trouvé dans la mémoire locale, interroger Firestore
+    if (!targetAdmin) {
+      try {
         const result = await authenticateAdminInFirestore(cleanEmail, enteredPassword);
         setIsLoading(false);
 
-        if (!result.success || !result.admin) {
-          setErrorMsg(result.error || "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général.");
+        if (result.success && result.admin) {
+          onLoginSuccess(result.admin);
           return;
         }
 
-        onLoginSuccess(result.admin);
+        // Affiche le message exact si le compte n'existe pas
+        setErrorMsg(
+          result.error ||
+          "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
+        );
         return;
-      }
-
-      // 3. Admin existant -> Vérification stricte du mot de passe
-      const expectedPassword = targetAdmin.motDePasse || 'admin123';
-      if (enteredPassword !== expectedPassword) {
+      } catch (err) {
         setIsLoading(false);
-        setErrorMsg("Mot de passe incorrect. Veuillez vérifier votre mot de passe administrateur.");
+        setErrorMsg(
+          "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
+        );
         return;
       }
-
-      // 4. Mot de passe valide -> Accès au Dashboard
-      setIsLoading(false);
-      onLoginSuccess(targetAdmin);
-    } catch (err) {
-      setIsLoading(false);
-      console.error('Login error:', err);
-      setErrorMsg('Erreur de connexion. Veuillez vérifier vos identifiants.');
     }
+
+    // 3. Compte trouvé -> Vérification stricte du mot de passe
+    const expectedPassword = targetAdmin.motDePasse || 'admin123';
+    if (enteredPassword !== expectedPassword) {
+      setIsLoading(false);
+      setErrorMsg("Mot de passe incorrect. Veuillez vérifier votre mot de passe administrateur.");
+      return;
+    }
+
+    // 4. Mot de passe valide -> Accès au Tableau de Bord
+    setIsLoading(false);
+    onLoginSuccess(targetAdmin);
   };
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
@@ -102,13 +109,14 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     const cleanEmail = registerEmail.trim().toLowerCase();
 
     // Vérifier si l'email existe déjà
-    const existing = availableAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
+    const allKnown = [...availableAdmins, ...initialAdmins];
+    const existing = allKnown.find((a) => a.email && a.email.toLowerCase() === cleanEmail);
     if (existing) {
       setErrorMsg('Un compte Administrateur existe déjà avec cette adresse email. Veuillez vous connecter.');
       return;
     }
 
-    // Vérification du Code Directeur
+    // Vérification du Code d'Autorisation Directeur
     const cleanCode = directorCode.trim().toUpperCase();
     if (!VALID_DIRECTOR_CODES.includes(cleanCode)) {
       setErrorMsg('Code d’autorisation Directeur invalide. Veuillez demander le code d’accès au Directeur Général.');
@@ -146,7 +154,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
   return (
     <div className="min-h-[calc(100vh-120px)] flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 font-poppins">
       <div className="w-full max-w-md bg-[#1F2937] text-white rounded-2xl shadow-2xl border border-gray-700/80 p-6 sm:p-8 space-y-6">
-        {/* En-tête de marque */}
+        {/* En-tête officiel */}
         <div className="text-center space-y-2">
           <KlinaTopLogo variant="full" size="md" lightBackground={false} />
           <h2 className="text-xl font-bold tracking-tight text-white mt-2">Espace Administration & RH</h2>
@@ -155,7 +163,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
           </p>
         </div>
 
-        {/* Sélecteur d'onglets */}
+        {/* Onglets Connexion / Création de compte */}
         <div className="flex rounded-xl bg-gray-900 p-1 border border-gray-700">
           <button
             type="button"
