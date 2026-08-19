@@ -10,6 +10,7 @@ export interface RhAdminUser {
   photoUrl?: string;
   initiales?: string;
   motDePasse?: string;
+  emailVerified?: boolean;
 }
 
 export type EmployeeStatus = 'Actif' | 'Inactif';
