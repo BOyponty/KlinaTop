@@ -55,43 +55,37 @@ export async function initializeDatabaseIfEmpty() {
     if (usersSnap.empty) {
       console.log('Seeding initial Firebase data...');
       
-      // Seed Equipes
       for (const eq of initialEquipes) {
         await setDoc(doc(db, EQUIPES_COLLECTION, eq.id), eq);
       }
 
-      // Seed Users
       for (const u of initialUsers) {
         await setDoc(doc(db, USERS_COLLECTION, u.id), u);
       }
 
-      // Seed Pointages
       for (const ptg of initialPointages) {
         await setDoc(doc(db, POINTAGES_COLLECTION, ptg.id), ptg);
       }
 
-      // Seed Presences
       for (const prs of initialPresences) {
         await setDoc(doc(db, PRESENCES_COLLECTION, prs.id), prs);
       }
 
-      // Seed Exports
       for (const exp of initialExportHistory) {
         await setDoc(doc(db, EXPORTS_COLLECTION, exp.id), exp);
       }
     }
 
-    // Toujours s'assurer que les admins ont leur mot de passe dans Firestore
+    // Toujours synchroniser les comptes administrateurs par défaut
     for (const adm of initialAdmins) {
       await setDoc(doc(db, ADMINS_COLLECTION, adm.id), adm, { merge: true });
     }
-    console.log('Firebase seeding & admin sync complete!');
   } catch (error) {
     console.error('Error seeding Firebase database:', error);
   }
 }
 
-// 1. Écouteur temps réel des agents
+// 1. Écouteur des agents
 export function subscribeToUsers(callback: (users: User[]) => void) {
   const q = query(collection(db, USERS_COLLECTION));
   return onSnapshot(q, (snapshot) => {
@@ -107,7 +101,7 @@ export function subscribeToUsers(callback: (users: User[]) => void) {
   });
 }
 
-// 2. Écouteur temps réel des pointages
+// 2. Écouteur des pointages
 export function subscribeToPointages(callback: (pointages: Pointage[]) => void) {
   const q = query(collection(db, POINTAGES_COLLECTION), orderBy('timestamp', 'desc'), limit(100));
   return onSnapshot(q, (snapshot) => {
@@ -121,7 +115,7 @@ export function subscribeToPointages(callback: (pointages: Pointage[]) => void) 
   });
 }
 
-// 3. Écouteur temps réel des présences
+// 3. Écouteur des présences
 export function subscribeToPresences(callback: (presences: Presence[]) => void) {
   const q = query(collection(db, PRESENCES_COLLECTION));
   return onSnapshot(q, (snapshot) => {
@@ -135,7 +129,7 @@ export function subscribeToPresences(callback: (presences: Presence[]) => void) 
   });
 }
 
-// 4. Écouteur temps réel des équipes
+// 4. Écouteur des équipes
 export function subscribeToEquipes(callback: (equipes: Equipe[]) => void) {
   const q = query(collection(db, EQUIPES_COLLECTION));
   return onSnapshot(q, (snapshot) => {
@@ -149,7 +143,7 @@ export function subscribeToEquipes(callback: (equipes: Equipe[]) => void) {
   });
 }
 
-// 5. Enregistrer un pointage dans Firestore
+// 5. Enregistrer un pointage
 export async function addPointageToFirestore(pointage: Pointage, presenceUpdate?: Partial<Presence>) {
   try {
     await setDoc(doc(db, POINTAGES_COLLECTION, pointage.id), pointage);
@@ -175,7 +169,7 @@ export async function addPointageToFirestore(pointage: Pointage, presenceUpdate?
   }
 }
 
-// 6. Enregistrer un agent dans Firestore
+// 6. Enregistrer un agent
 export async function registerUserInFirestore(user: User) {
   try {
     await setDoc(doc(db, USERS_COLLECTION, user.id), user);
@@ -185,7 +179,7 @@ export async function registerUserInFirestore(user: User) {
   }
 }
 
-// 7. Écouteur temps réel des administrateurs
+// 7. Écouteur des administrateurs
 export function subscribeToAdmins(callback: (admins: RhAdminUser[]) => void) {
   const q = query(collection(db, ADMINS_COLLECTION));
   return onSnapshot(q, (snapshot) => {
@@ -204,7 +198,7 @@ export function subscribeToAdmins(callback: (admins: RhAdminUser[]) => void) {
   });
 }
 
-// 8. Enregistrer un administrateur dans Firestore
+// 8. Enregistrer un administrateur
 export async function registerAdminInFirestore(admin: RhAdminUser) {
   try {
     await setDoc(doc(db, ADMINS_COLLECTION, admin.id), admin);
@@ -214,16 +208,15 @@ export async function registerAdminInFirestore(admin: RhAdminUser) {
   }
 }
 
-// 9. Authentification STRICTE avec vérification du mot de passe
+// 9. Vérification stricte des identifiants Administrateurs
 export async function authenticateAdminInFirestore(
   email: string,
   enteredPassword: string
 ): Promise<{ success: boolean; admin?: RhAdminUser; error?: string }> {
-  try {
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPass = enteredPassword.trim();
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPass = enteredPassword.trim();
 
-    // Recherche dans la collection admins de Firestore
+  try {
     const adminsSnap = await getDocs(collection(db, ADMINS_COLLECTION));
     let matchedAdmin: RhAdminUser | null = null;
 
@@ -240,18 +233,19 @@ export async function authenticateAdminInFirestore(
       const defaultMatch = initialAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
       if (defaultMatch) {
         matchedAdmin = defaultMatch;
-        await setDoc(doc(db, ADMINS_COLLECTION, defaultMatch.id), defaultMatch, { merge: true });
+        try {
+          await setDoc(doc(db, ADMINS_COLLECTION, defaultMatch.id), defaultMatch, { merge: true });
+        } catch {}
       }
     }
 
     if (!matchedAdmin) {
       return {
         success: false,
-        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte avec le Code d'Autorisation Directeur."
+        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
       };
     }
 
-    // Vérification stricte du mot de passe
     const expectedPassword = (matchedAdmin as RhAdminUser).motDePasse || 'admin123';
     if (cleanPass !== expectedPassword) {
       return {
@@ -266,9 +260,22 @@ export async function authenticateAdminInFirestore(
     };
   } catch (error) {
     console.error('Authentication check error:', error);
+    const defaultMatch = initialAdmins.find((a) => a.email.toLowerCase() === cleanEmail);
+    if (!defaultMatch) {
+      return {
+        success: false,
+        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
+      };
+    }
+    if (cleanPass !== (defaultMatch.motDePasse || 'admin123')) {
+      return {
+        success: false,
+        error: "Mot de passe incorrect. Veuillez vérifier votre mot de passe administrateur."
+      };
+    }
     return {
-      success: false,
-      error: "Erreur lors de la vérification des identifiants sur le serveur."
+      success: true,
+      admin: defaultMatch
     };
   }
 }
