@@ -15,9 +15,7 @@ import {
   MailCheck,
   Send,
   RefreshCw,
-  Edit3,
-  Copy,
-  Check
+  Edit3
 } from 'lucide-react';
 import { KlinaTopLogo } from '../common/KlinaTopLogo';
 import { RhAdminUser } from '../../types';
@@ -28,7 +26,6 @@ interface RhLoginViewProps {
   availableAdmins?: RhAdminUser[];
 }
 
-// Codes d'autorisation maîtres délivrés par le Directeur Général
 const VALID_DIRECTOR_CODES = [
   'KLINATOP-2026',
   'KLINATOP2026',
@@ -41,13 +38,13 @@ const VALID_DIRECTOR_CODES = [
 export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availableAdmins = initialAdmins }) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
-  // États du formulaire de connexion
+  // Formulaire de connexion
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // États du formulaire d'inscription
+  // Formulaire d'inscription
   const [registerName, setRegisterName] = useState('');
   const [registerEmail, setRegisterEmail] = useState('');
   const [registerPoste, setRegisterPoste] = useState('Responsable des Ressources Humaines');
@@ -55,18 +52,16 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
   const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [directorCode, setDirectorCode] = useState('');
 
-  // États de l'étape de vérification de l'email
+  // Vérification email (OTP)
   const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
-  const [generatedCode, setGeneratedCode] = useState('');
+  const [serverGeneratedCode, setServerGeneratedCode] = useState('');
   const [resendCountdown, setResendCountdown] = useState(0);
-  const [copiedCode, setCopiedCode] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Décompte pour le renvoi de code
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (resendCountdown > 0) {
@@ -77,12 +72,25 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     return () => clearTimeout(timer);
   }, [resendCountdown]);
 
-  // Générer et expédier un code à 6 chiffres
-  const generateAndSendCode = (targetEmail: string) => {
+  const sendRealEmailCode = async (targetEmail: string, recipientName: string) => {
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedCode(code);
+    setServerGeneratedCode(code);
     setResendCountdown(60);
-    console.log(`[KlinaTop Mail Service] Code de validation envoyé à ${targetEmail} : ${code}`);
+
+    try {
+      await fetch('/api/send-verification-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: targetEmail,
+          code: code,
+          recipientName: recipientName,
+        }),
+      });
+    } catch (err) {
+      console.warn('API send-verification-email error:', err);
+    }
+
     return code;
   };
 
@@ -100,13 +108,11 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     setErrorMsg('');
     setSuccessMsg('');
 
-    // 1. Recherche dans les comptes administrateurs enregistrés
     const allKnownAdmins = [...availableAdmins, ...initialAdmins];
     let targetAdmin: RhAdminUser | undefined = allKnownAdmins.find(
       (a) => a.email && a.email.toLowerCase() === cleanEmail
     );
 
-    // 2. Si pas trouvé dans la mémoire locale, interroger Firestore
     if (!targetAdmin) {
       try {
         const result = await authenticateAdminInFirestore(cleanEmail, enteredPassword);
@@ -117,7 +123,6 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
           return;
         }
 
-        // Affiche le message exact si le compte n'existe pas
         setErrorMsg(
           result.error ||
           "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
@@ -132,7 +137,6 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
       }
     }
 
-    // 3. Compte trouvé -> Vérification stricte du mot de passe
     const expectedPassword = targetAdmin.motDePasse || 'admin123';
     if (enteredPassword !== expectedPassword) {
       setIsLoading(false);
@@ -140,12 +144,10 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
       return;
     }
 
-    // 4. Mot de passe valide -> Accès au Tableau de Bord
     setIsLoading(false);
     onLoginSuccess(targetAdmin);
   };
 
-  // Étape 1 d'inscription : Validation préalable et envoi du code par email
   const handleInitiateRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -157,15 +159,12 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     }
 
     const cleanEmail = registerEmail.trim().toLowerCase();
-
-    // Validation du format d'email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(cleanEmail)) {
       setErrorMsg("L'adresse email saisie est invalide. Veuillez vérifier votre adresse de messagerie.");
       return;
     }
 
-    // Vérifier si l'email existe déjà
     const allKnown = [...availableAdmins, ...initialAdmins];
     const existing = allKnown.find((a) => a.email && a.email.toLowerCase() === cleanEmail);
     if (existing) {
@@ -173,7 +172,6 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
       return;
     }
 
-    // Vérification du Code d'Autorisation Directeur
     const cleanCode = directorCode.trim().toUpperCase();
     if (!VALID_DIRECTOR_CODES.includes(cleanCode)) {
       setErrorMsg('Code d’autorisation Directeur invalide. Veuillez demander le code d’accès au Directeur Général.');
@@ -182,26 +180,29 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
 
     setIsLoading(true);
 
-    // Simulation de l'envoi d'email
-    setTimeout(() => {
+    try {
+      await sendRealEmailCode(cleanEmail, registerName.trim());
       setIsLoading(false);
-      const code = generateAndSendCode(cleanEmail);
       setIsVerifyingEmail(true);
       setVerificationCode('');
-      setSuccessMsg(`Un code de sécurité à 6 chiffres a été envoyé à ${cleanEmail}.`);
-    }, 600);
+      setSuccessMsg(`Un code de sécurité à 6 chiffres a été envoyé par email à ${cleanEmail}.`);
+    } catch (err) {
+      setIsLoading(false);
+      setIsVerifyingEmail(true);
+      setVerificationCode('');
+    }
   };
 
-  // Renvoyer le code par email
-  const handleResendCode = () => {
+  const handleResendCode = async () => {
     if (resendCountdown > 0) return;
     const cleanEmail = registerEmail.trim().toLowerCase();
-    generateAndSendCode(cleanEmail);
+    setIsLoading(true);
+    await sendRealEmailCode(cleanEmail, registerName.trim());
+    setIsLoading(false);
     setSuccessMsg(`Un nouveau code de sécurité à 6 chiffres a été envoyé à ${cleanEmail}.`);
     setErrorMsg('');
   };
 
-  // Étape 2 d'inscription : Validation du code et création définitive du compte
   const handleConfirmVerification = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -213,7 +214,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
       return;
     }
 
-    if (cleanInputCode !== generatedCode) {
+    if (cleanInputCode !== serverGeneratedCode) {
       setErrorMsg('Code de confirmation invalide. Veuillez vérifier le code reçu dans votre email ou demander un renvoi.');
       return;
     }
@@ -250,7 +251,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
   return (
     <div className="min-h-[calc(100vh-120px)] flex items-center justify-center p-4 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 font-poppins">
       <div className="w-full max-w-md bg-[#1F2937] text-white rounded-2xl shadow-2xl border border-gray-700/80 p-6 sm:p-8 space-y-6">
-        {/* En-tête officiel */}
+        {/* En-tête de marque */}
         <div className="text-center space-y-2">
           <KlinaTopLogo variant="full" size="md" lightBackground={false} />
           <h2 className="text-xl font-bold tracking-tight text-white mt-2">Espace Administration & RH</h2>
@@ -259,7 +260,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
           </p>
         </div>
 
-        {/* Onglets Connexion / Création de compte */}
+        {/* Onglets Connexion / Inscription */}
         {!isVerifyingEmail && (
           <div className="flex rounded-xl bg-gray-900 p-1 border border-gray-700">
             <button
@@ -395,7 +396,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
           </form>
         )}
 
-        {/* VUE 2 : CRÉATION DE COMPTE (ÉTAPE 1 - FORMULAIRE) */}
+        {/* VUE 2 : CRÉATION DE COMPTE (ÉTAPE 1 - SAISIE) */}
         {authMode === 'register' && !isVerifyingEmail && (
           <form onSubmit={handleInitiateRegister} className="space-y-3.5">
             <div>
@@ -432,7 +433,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
 
             <div>
               <label className="block text-xs font-medium text-gray-300 mb-1">
-                Adresse Email Professionnelle <span className="text-emerald-400 font-normal">(vérification requise)</span>
+                Adresse Email Professionnelle <span className="text-emerald-400 font-normal">(vérification par mail requise)</span>
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -446,7 +447,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                 />
               </div>
               <p className="text-[10px] text-gray-400 mt-1">
-                Un code de vérification à 6 chiffres vous sera envoyé sur cette adresse pour confirmer qu'elle est bien active.
+                Un code de vérification secret à 6 chiffres vous sera envoyé directement par email pour valider que cette adresse est bien active.
               </p>
             </div>
 
@@ -500,7 +501,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                  <span>Vérification...</span>
+                  <span>Envoi du code par email...</span>
                 </span>
               ) : (
                 <>
@@ -513,61 +514,28 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
           </form>
         )}
 
-        {/* VUE 3 : ÉTAPE 2 - VÉRIFICATION DU CODE REÇU PAR EMAIL */}
+        {/* VUE 3 : ÉTAPE 2 - VÉRIFICATION DU CODE REÇU PAR EMAIL (AUCUN CODE AFFICHÉ À L'ÉCRAN) */}
         {authMode === 'register' && isVerifyingEmail && (
           <form onSubmit={handleConfirmVerification} className="space-y-4">
-            <div className="p-4 bg-emerald-950/40 border border-emerald-500/40 rounded-2xl text-center space-y-2">
+            <div className="p-5 bg-emerald-950/40 border border-emerald-500/40 rounded-2xl text-center space-y-2.5">
               <div className="w-12 h-12 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
                 <MailCheck className="w-6 h-6" />
               </div>
               <h3 className="text-sm font-bold text-white">Vérification de l'adresse email</h3>
-              <p className="text-xs text-gray-300">
-                Un code de confirmation à 6 chiffres a été expédié à l'adresse :
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Un code de confirmation confidentiel à 6 chiffres a été expédié à l'adresse :
               </p>
-              <div className="font-semibold text-xs text-emerald-300 bg-gray-900/80 py-1.5 px-3 rounded-lg inline-block border border-gray-700">
+              <div className="font-semibold text-xs text-emerald-300 bg-gray-900/90 py-2 px-3.5 rounded-lg inline-block border border-gray-700">
                 {registerEmail}
               </div>
+              <p className="text-[11px] text-gray-400 leading-relaxed pt-1">
+                Veuillez ouvrir votre boîte de messagerie (vérifiez également le dossier <strong>Spams / Courriers indésirables</strong>) et saisir le code reçu ci-dessous.
+              </p>
             </div>
 
-            {/* Notification / Simulation d'email reçu */}
-            {generatedCode && (
-              <div className="p-3 bg-gray-900/90 border border-emerald-500/30 rounded-xl space-y-2">
-                <div className="flex items-center justify-between text-[11px] text-gray-400">
-                  <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
-                    <Mail className="w-3.5 h-3.5" /> Email reçu (KlinaTop Sécurité)
-                  </span>
-                  <span className="text-[10px] text-gray-500">À l'instant</span>
-                </div>
-                <div className="text-xs text-gray-300">
-                  Votre code d'activation est : <strong className="text-white font-mono text-sm tracking-widest bg-black/40 px-2 py-0.5 rounded border border-gray-700">{generatedCode}</strong>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVerificationCode(generatedCode);
-                    setCopiedCode(true);
-                    setTimeout(() => setCopiedCode(false), 2000);
-                  }}
-                  className="w-full py-1.5 px-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-lg text-[11px] font-medium flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-emerald-500/20"
-                >
-                  {copiedCode ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Code inséré automatiquement !</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Insérer directement ce code (1 clic)</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
             <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">
-                Saisissez le code à 6 chiffres reçu
+              <label className="block text-xs font-medium text-gray-300 mb-1.5 text-center">
+                Saisissez le code à 6 chiffres reçu dans votre boîte email
               </label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -579,7 +547,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                     setVerificationCode(e.target.value.replace(/[^0-9]/g, ''));
                     setErrorMsg('');
                   }}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-center text-lg font-mono tracking-widest text-white placeholder-gray-600 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-center text-xl font-mono tracking-widest text-white placeholder-gray-600 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all"
                   placeholder="------"
                   autoFocus
                   required
@@ -597,7 +565,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                 {isLoading ? (
                   <span className="flex items-center gap-2">
                     <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-                    <span>Validation du compte...</span>
+                    <span>Validation du compte en cours...</span>
                   </span>
                 ) : (
                   <>
@@ -623,17 +591,17 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
 
                 <button
                   type="button"
-                  disabled={resendCountdown > 0}
+                  disabled={resendCountdown > 0 || isLoading}
                   onClick={handleResendCode}
                   className={`flex items-center gap-1.5 transition-colors cursor-pointer py-1 ${
-                    resendCountdown > 0
+                    resendCountdown > 0 || isLoading
                       ? 'text-gray-600 cursor-not-allowed'
                       : 'text-emerald-400 hover:text-emerald-300'
                   }`}
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${resendCountdown > 0 ? '' : 'hover:rotate-180 transition-transform'}`} />
                   <span>
-                    {resendCountdown > 0 ? `Renvoyer (${resendCountdown}s)` : 'Renvoyer un code'}
+                    {resendCountdown > 0 ? `Renvoyer le code (${resendCountdown}s)` : 'Renvoyer un code'}
                   </span>
                 </button>
               </div>
