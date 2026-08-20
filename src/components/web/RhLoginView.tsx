@@ -118,10 +118,16 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
         }),
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch (jsonErr) {
+        throw new Error("Le serveur d'envoi n'a pas répondu. Veuillez vous assurer que le serveur a bien été redémarré avec la commande « npm run dev ».");
+      }
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "Impossible d'expédier l'email.");
+        throw new Error(data.error || "Impossible d'expédier l'email. Veuillez vérifier vos identifiants SMTP.");
       }
 
       return code;
@@ -389,7 +395,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                     setPassword(e.target.value);
                     setErrorMsg('');
                   }}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] transition-all"
                   placeholder="••••••••"
                   required
                 />
@@ -449,7 +455,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                   value={registerName}
                   onChange={(e) => setRegisterName(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] transition-all"
-                  placeholder="ex: Koffi Fadou Léon"
+                  placeholder="ex: fadou leon"
                   required
                 />
               </div>
@@ -483,7 +489,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                   value={registerEmail}
                   onChange={(e) => setRegisterEmail(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] transition-all"
-                  placeholder="ex: direction@klinatop.bj"
+                  placeholder="ex: leonkoffifadou@gmail.com"
                   required
                 />
               </div>
@@ -526,7 +532,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                 value={directorCode}
                 onChange={(e) => setDirectorCode(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white font-mono uppercase tracking-wider placeholder-gray-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all"
-                placeholder="Code fourni par le Directeur (ex: KLINATOP-2026)"
+                placeholder="Code fourni par le Directeur (ex: KT2026)"
                 required
               />
               <p className="text-[10px] text-gray-400">
