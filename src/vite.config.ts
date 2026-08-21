@@ -1,11 +1,16 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { defineConfig } from 'vite';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Résolution compatible ES Module pour Vercel
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const DEFAULT_SMTP_USER = 'leonkoffifadou2000@gmail.com';
 const DEFAULT_SMTP_PASS = 'cnxwmwkgktjawffa';
