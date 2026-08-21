@@ -1,32 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Navbar } from './components/Navbar';
-import { Sidebar, WebTab } from './components/Sidebar';
-import { CameraModal } from './components/CameraModal';
-import { PhotoDetailModal } from './components/PhotoDetailModal';
-import { AddEmployeeModal } from './components/AddEmployeeModal';
-
-// Web Views
-import { DashboardView } from './components/web/DashboardView';
-import { EmployeesView } from './components/web/EmployeesView';
-import { AttendanceView } from './components/web/AttendanceView';
-import { PointagesView } from './components/web/PointagesView';
-import { ReportsView } from './components/web/ReportsView';
-import { PayrollExportView } from './components/web/PayrollExportView';
-import { SettingsView } from './components/web/SettingsView';
-import { RhLoginView } from './components/web/RhLoginView';
-
-// Mobile Container
-import { MobileAppContainer } from './components/mobile/MobileAppContainer';
-
-// Mock Data & Firestore synchronization
+import {
+  Users as UsersIcon,
+  Clock,
+  Building,
+  Smartphone,
+  Calendar,
+  AlertCircle,
+  Menu,
+  ShieldCheck,
+  Award,
+  Layers,
+  MapPin,
+  RefreshCw,
+  LogOut,
+  FolderLock
+} from 'lucide-react';
+import {
+  User,
+  Equipe,
+  Pointage,
+  Presence,
+  RhAdminUser,
+  PayrollExportHistory,
+} from './types';
 import {
   initialUsers,
   initialEquipes,
   initialPresences,
   initialPointages,
   initialExportHistory,
-} from './data/mockData';
-import { User, Equipe, Presence, Pointage, PayrollExportHistory, RhAdminUser } from './types';
+} from './mockData';
 import {
   initializeDatabaseIfEmpty,
   subscribeToUsers,
@@ -37,286 +40,285 @@ import {
   initialAdmins,
   addPointageToFirestore,
   registerUserInFirestore,
+  updateUserInFirestore,
 } from './lib/firestoreService';
 
+// Dashboard views & modals
+import { DashboardHeader } from './components/web/DashboardHeader';
+import { DashboardStats } from './components/web/DashboardStats';
+import { LiveTrackingCard } from './components/web/LiveTrackingCard';
+import { QuickActions } from './components/web/QuickActions';
+import { PointagesTable } from './components/web/PointagesTable';
+import { PresencesTable } from './components/web/PresencesTable';
+import { EmployeesView } from './components/web/EmployeesView';
+import { SitesView } from './components/web/SitesView';
+import { RapportsView } from './components/web/RapportsView';
+import { CameraModal } from './components/CameraModal';
+import { PhotoInspectionModal } from './components/PhotoInspectionModal';
+import { AddEmployeeModal } from './components/AddEmployeeModal';
+import { AddSiteModal } from './components/AddSiteModal';
+import { RhLoginModal } from './components/RhLoginModal';
+import { MobileAppContainer } from './components/mobile/MobileAppContainer';
+import { KlinaTopLogo } from './components/common/KlinaTopLogo';
+
 export default function App() {
-  const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>('web');
-  
-  // RH Administrator multi-user state with localStorage persistence
-  const [admins, setAdmins] = useState<RhAdminUser[]>(initialAdmins);
+  // Navigation tabs (RH Web App)
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'pointages' | 'presences' | 'employes' | 'sites' | 'rapports' | 'mobile'>('dashboard');
+
+  // RH Authentication State
   const [currentAdmin, setCurrentAdmin] = useState<RhAdminUser | null>(() => {
     try {
-      const saved = localStorage.getItem('klinatop_logged_rh_user');
-      if (saved) {
-        return JSON.parse(saved);
+      const savedAdmin = localStorage.getItem('klinatop_logged_admin');
+      if (savedAdmin) {
+        return JSON.parse(savedAdmin);
       }
     } catch (e) {
-      console.error('Error reading RH user from localStorage', e);
+      console.warn('Could not parse saved admin session', e);
     }
     return null;
   });
 
-  const [isRhAuthenticated, setIsRhAuthenticated] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('klinatop_logged_rh_user');
-      return !!saved;
-    } catch {
-      return false;
-    }
-  });
+  const [isRhLoginModalOpen, setIsRhLoginModalOpen] = useState(false);
+  const [adminsList, setAdminsList] = useState<RhAdminUser[]>(initialAdmins);
 
-  // Responsive mobile device detection
-  const [isSmallScreen, setIsSmallScreen] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return window.innerWidth < 768;
-    }
-    return false;
-  });
-
-  useEffect(() => {
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 768;
-      setIsSmallScreen(isMobile);
-      if (isMobile) {
-        setCurrentMode('mobile');
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Initialize Firestore listeners & initial seeding
-  useEffect(() => {
-    initializeDatabaseIfEmpty();
-
-    const unsubUsers = subscribeToUsers((firestoreUsers) => {
-      if (firestoreUsers.length > 0) {
-        setUsers(firestoreUsers);
-        // keep selected agent in sync if found
-        setSelectedAgent((curr) => {
-          const match = firestoreUsers.find((u) => u.id === curr.id);
-          return match || firestoreUsers[0] || curr;
-        });
-      }
-    });
-
-    const unsubPointages = subscribeToPointages((firestorePointages) => {
-      if (firestorePointages.length > 0) {
-        setPointages(firestorePointages);
-      }
-    });
-
-    const unsubPresences = subscribeToPresences((firestorePresences) => {
-      if (firestorePresences.length > 0) {
-        setPresences(firestorePresences);
-      }
-    });
-
-    const unsubEquipes = subscribeToEquipes((firestoreEquipes) => {
-      if (firestoreEquipes.length > 0) {
-        setEquipes(firestoreEquipes);
-      }
-    });
-
-    const unsubAdmins = subscribeToAdmins((firestoreAdmins) => {
-      if (firestoreAdmins.length > 0) {
-        setAdmins(firestoreAdmins);
-        // Update currentAdmin if matching
-        setCurrentAdmin((curr) => {
-          if (!curr) return null;
-          const match = firestoreAdmins.find((a) => a.id === curr.id || a.email.toLowerCase() === curr.email.toLowerCase());
-          return match || curr;
-        });
-      }
-    });
-
-    return () => {
-      unsubUsers();
-      unsubPointages();
-      unsubPresences();
-      unsubEquipes();
-      unsubAdmins();
-    };
-  }, []);
-
-  // Web Navigation Tab
-  const [activeWebTab, setActiveWebTab] = useState<WebTab>('dashboard');
-
-  // Global Centralized State
+  // Real-time synchronization state from Firestore
+  const [isSyncing, setIsSyncing] = useState(true);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
   const [users, setUsers] = useState<User[]>(initialUsers);
   const [equipes, setEquipes] = useState<Equipe[]>(initialEquipes);
   const [presences, setPresences] = useState<Presence[]>(initialPresences);
   const [pointages, setPointages] = useState<Pointage[]>(initialPointages);
   const [exportHistory, setExportHistory] = useState<PayrollExportHistory[]>(initialExportHistory);
 
-  // Active Agent for Mobile Simulation
-  const [selectedAgent, setSelectedAgent] = useState<User>(initialUsers[0]);
+  // Active Agent for Mobile Simulation with persistent fallback
+  const [selectedAgent, setSelectedAgent] = useState<User>(() => {
+    try {
+      const savedId = localStorage.getItem('klinatop_logged_agent_id');
+      if (savedId) {
+        const found = initialUsers.find((u) => u.id === savedId);
+        if (found) return found;
+      }
+    } catch {}
+    return initialUsers[0];
+  });
   const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
   const [checkInTime, setCheckInTime] = useState<string>('07:45');
 
-  // Modals state
-  const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  // Modals & Camera
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
-  const [inspectPointage, setInspectPointage] = useState<Pointage | null>(null);
   const [photoCaptured, setPhotoCaptured] = useState<string | null>(null);
+  const [inspectPointage, setInspectPointage] = useState<Pointage | null>(null);
+  const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
+  const [isAddSiteModalOpen, setIsAddSiteModalOpen] = useState(false);
 
-  // Check-In Action handler from Field Agent Mobile App
+  // Responsive device check
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsSmallScreen(window.innerWidth < 1024);
+    };
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
+
+  // Initialize Firestore listeners
+  useEffect(() => {
+    let unsubUsers: () => void;
+    let unsubPointages: () => void;
+    let unsubPresences: () => void;
+    let unsubEquipes: () => void;
+    let unsubAdmins: () => void;
+
+    async function bootstrap() {
+      setIsSyncing(true);
+      try {
+        await initializeDatabaseIfEmpty();
+        setIsCloudConnected(true);
+
+        unsubUsers = subscribeToUsers((data) => {
+          if (data && data.length > 0) {
+            setUsers(data);
+            const currentSavedId = localStorage.getItem('klinatop_logged_agent_id');
+            if (currentSavedId) {
+              const matched = data.find((u) => u.id === currentSavedId);
+              if (matched) setSelectedAgent(matched);
+            }
+          }
+        });
+
+        unsubPointages = subscribeToPointages((data) => {
+          if (data && data.length > 0) setPointages(data);
+        });
+
+        unsubPresences = subscribeToPresences((data) => {
+          if (data && data.length > 0) setPresences(data);
+        });
+
+        unsubEquipes = subscribeToEquipes((data) => {
+          if (data && data.length > 0) setEquipes(data);
+        });
+
+        unsubAdmins = subscribeToAdmins((data) => {
+          if (data && data.length > 0) {
+            setAdminsList(data);
+            // Synchronisation sécurisée de l'administrateur connecté
+            setCurrentAdmin((curr) => {
+              if (!curr) return null;
+              const currEmail = (curr.email || '').toLowerCase();
+              const match = data.find(
+                (a) => a.id === curr.id || (currEmail && a.email && a.email.toLowerCase() === currEmail)
+              );
+              return match || curr;
+            });
+          }
+        });
+      } catch (err) {
+        console.warn('Operating in local offline mode:', err);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+
+    bootstrap();
+
+    return () => {
+      if (unsubUsers) unsubUsers();
+      if (unsubPointages) unsubPointages();
+      if (unsubPresences) unsubPresences();
+      if (unsubEquipes) unsubEquipes();
+      if (unsubAdmins) unsubAdmins();
+    };
+  }, []);
+
+  // Handlers for Check-in & Check-out
   const handlePerformCheckIn = async (photoUrl: string, address: string) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = now.toLocaleDateString('fr-FR');
-
-    const newPointage: Pointage = {
-      id: `ptg-${Date.now()}`,
-      userId: selectedAgent.id,
-      userName: selectedAgent.nom,
-      userPoste: selectedAgent.poste,
-      equipeNom: selectedAgent.equipeNom,
-      type: 'check-in',
-      timestamp: now.toISOString(),
-      formattedTime: timeStr,
-      formattedDate: dateStr,
-      latitude: 6.3532,
-      longitude: 2.4211,
-      adresse: address || 'Avenue Jean Paul II, Cotonou, Bénin',
-      siteName: 'Site KlinaTop Main',
-      photoUrl,
-    };
-
-    // Optimistic UI update
-    setPointages((prev) => [newPointage, ...prev]);
-
-    const presenceUpdate: Partial<Presence> = {
-      heureCheckin: timeStr,
-      adresseCheckin: address,
-      photoCheckinUrl: photoUrl,
-      statut: 'en_poste',
-      duree: 'En cours',
-    };
-
-    // Update presence sheet locally
-    setPresences((prev) => {
-      const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          ...presenceUpdate,
-        };
-        return updated;
-      } else {
-        const newPresence: Presence = {
-          id: `prs-${Date.now()}`,
-          userId: selectedAgent.id,
-          userName: selectedAgent.nom,
-          userPhoto: selectedAgent.photoUrl,
-          userPoste: selectedAgent.poste,
-          equipeNom: selectedAgent.equipeNom,
-          date: dateStr,
-          heureCheckin: timeStr,
-          adresseCheckin: address,
-          photoCheckinUrl: photoUrl,
-          duree: 'En cours',
-          dureeMinutes: 0,
-          heureCheckout: null,
-          statut: 'en_poste',
-        };
-        return [newPresence, ...prev];
-      }
-    });
-
     setIsCheckedIn(true);
     setCheckInTime(timeStr);
-    setPhotoCaptured(null);
 
-    // Save to Cloud Firestore
+    const newPtg: Pointage = {
+      id: `ptg-${Date.now()}`,
+      employeId: selectedAgent.id,
+      employeNom: selectedAgent.nom,
+      equipeNom: selectedAgent.equipeNom,
+      heure: timeStr,
+      statut: 'Conforme',
+      geolocalisation: {
+        adresse: address || 'Cotonou, Bénin',
+        latitude: 6.3654 + (Math.random() - 0.5) * 0.01,
+        longitude: 2.4183 + (Math.random() - 0.5) * 0.01,
+        statut: 'Conforme',
+      },
+      photoPreuveUrl: photoUrl || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&q=80&w=300',
+      type: 'Arrivée',
+    };
+
+    setPointages((prev) => [newPtg, ...prev]);
+
+    // Update Presences Table
+    setPresences((prev) =>
+      prev.map((p) =>
+        p.employeId === selectedAgent.id
+          ? {
+              ...p,
+              statut: 'Présent',
+              heureArrivee: timeStr,
+              photoArriveeUrl: newPtg.photoPreuveUrl,
+              localisationArrivee: newPtg.geolocalisation.adresse,
+            }
+          : p
+      )
+    );
+
+    // Save to Firestore
     try {
-      await addPointageToFirestore(newPointage, presenceUpdate);
-    } catch (err) {
-      console.error('Error syncing check-in with Cloud Firestore:', err);
+      await addPointageToFirestore(newPtg);
+    } catch (e) {
+      console.warn('Could not save to Cloud Firestore:', e);
     }
   };
 
-  // Check-Out Action handler from Field Agent Mobile App
   const handlePerformCheckOut = async (photoUrl: string) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    const dateStr = now.toLocaleDateString('fr-FR');
-
-    const newPointage: Pointage = {
-      id: `ptg-${Date.now()}`,
-      userId: selectedAgent.id,
-      userName: selectedAgent.nom,
-      userPoste: selectedAgent.poste,
-      equipeNom: selectedAgent.equipeNom,
-      type: 'check-out',
-      timestamp: now.toISOString(),
-      formattedTime: timeStr,
-      formattedDate: dateStr,
-      latitude: 6.3532,
-      longitude: 2.4211,
-      adresse: 'Site KlinaTop, Cotonou',
-      siteName: 'Site KlinaTop Main',
-      photoUrl,
-    };
-
-    // Optimistic UI update
-    setPointages((prev) => [newPointage, ...prev]);
-
-    const presenceUpdate: Partial<Presence> = {
-      heureCheckout: timeStr,
-      photoCheckoutUrl: photoUrl,
-      duree: '8h 15m',
-      statut: 'présent',
-    };
-
-    setPresences((prev) => {
-      const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          ...presenceUpdate,
-        };
-        return updated;
-      }
-      return prev;
-    });
-
     setIsCheckedIn(false);
-    setPhotoCaptured(null);
 
-    // Save to Cloud Firestore
+    const newPtg: Pointage = {
+      id: `ptg-${Date.now()}`,
+      employeId: selectedAgent.id,
+      employeNom: selectedAgent.nom,
+      equipeNom: selectedAgent.equipeNom,
+      heure: timeStr,
+      statut: 'Conforme',
+      geolocalisation: {
+        adresse: 'Site Client - Terminé',
+        latitude: 6.3654,
+        longitude: 2.4183,
+        statut: 'Conforme',
+      },
+      photoPreuveUrl: photoUrl || 'https://images.unsplash.com/photo-1540569014015-19a7be504e3a?auto=format&fit=crop&q=80&w=300',
+      type: 'Départ',
+    };
+
+    setPointages((prev) => [newPtg, ...prev]);
+
+    // Update Presences Table
+    setPresences((prev) =>
+      prev.map((p) =>
+        p.employeId === selectedAgent.id
+          ? {
+              ...p,
+              heureDepart: timeStr,
+              photoDepartUrl: newPtg.photoPreuveUrl,
+              totalHeures: '8h 00m',
+            }
+          : p
+      )
+    );
+
+    // Save to Firestore
     try {
-      await addPointageToFirestore(newPointage, presenceUpdate);
-    } catch (err) {
-      console.error('Error syncing check-out with Cloud Firestore:', err);
+      await addPointageToFirestore(newPtg);
+    } catch (e) {
+      console.warn('Could not save to Cloud Firestore:', e);
     }
   };
 
-  // Employee CRUD handlers
   const handleAddEmployee = async (newEmp: User) => {
     setUsers((prev) => [newEmp, ...prev]);
     try {
       await registerUserInFirestore(newEmp);
-    } catch (err) {
-      console.error('Error adding user to Firestore:', err);
+    } catch (e) {
+      console.error('Error creating employee:', e);
     }
   };
 
-  const handleToggleUserStatus = async (userId: string) => {
+  const handleRegisterNewAgent = async (newUser: User) => {
+    setUsers((prev) => [newUser, ...prev]);
+    setSelectedAgent(newUser);
+    try {
+      await registerUserInFirestore(newUser);
+    } catch (e) {
+      console.error('Error registering agent:', e);
+    }
+  };
+
+  const handleUpdateAgentPhoto = async (userId: string, photoUrl: string) => {
+    // 1. Update local users state
     setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === userId) {
-          const updated = { ...u, statut: (u.statut === 'Actif' ? 'Inactif' : 'Actif') as any };
-          registerUserInFirestore(updated).catch(console.error);
-          return updated;
-        }
-        return u;
-      })
+      prev.map((u) => (u.id === userId ? { ...u, photoUrl } : u))
     );
+    // 2. Update selected agent if matching
+    setSelectedAgent((curr) => (curr.id === userId ? { ...curr, photoUrl } : curr));
+    // 3. Persist to Cloud Firestore
+    try {
+      await updateUserInFirestore(userId, { photoUrl });
+    } catch (err) {
+      console.error('Error updating user photo in Firestore:', err);
+    }
   };
 
   const handleDeleteUser = (userId: string) => {
@@ -325,132 +327,193 @@ export default function App() {
     }
   };
 
-  const handleResetData = () => {
-    setUsers(initialUsers);
-    setEquipes(initialEquipes);
-    setPresences(initialPresences);
-    setPointages(initialPointages);
-    setExportHistory(initialExportHistory);
-    setIsCheckedIn(false);
-    alert('Données de démonstration KlinaTop réinitialisées avec succès !');
+  const handleAddSite = (newSite: any) => {
+    const newEquipe: Equipe = {
+      id: newSite.id,
+      nom: newSite.nom,
+      siteNom: newSite.siteNom,
+      zone: newSite.zone,
+      horaire: newSite.horaire,
+      statut: 'Actif',
+      agentsCount: 0,
+      presenceTaux: 100,
+    };
+    setEquipes((prev) => [newEquipe, ...prev]);
   };
 
-  const handleLogoutRH = () => {
-    try {
-      localStorage.removeItem('klinatop_logged_rh_user');
-    } catch (e) {
-      console.error(e);
-    }
-    setCurrentAdmin(null);
-    setIsRhAuthenticated(false);
-  };
-
-  const handleRhLoginSuccess = (admin: RhAdminUser) => {
-    try {
-      localStorage.setItem('klinatop_logged_rh_user', JSON.stringify(admin));
-    } catch (e) {
-      console.error(e);
-    }
+  const handleAdminLogin = (admin: RhAdminUser) => {
     setCurrentAdmin(admin);
-    setIsRhAuthenticated(true);
+    try {
+      localStorage.setItem('klinatop_logged_admin', JSON.stringify(admin));
+    } catch (e) {}
+    setIsRhLoginModalOpen(false);
   };
+
+  const handleAdminLogout = () => {
+    setCurrentAdmin(null);
+    try {
+      localStorage.removeItem('klinatop_logged_admin');
+    } catch (e) {}
+  };
+
+  // If mobile viewport, show exclusively Mobile App view
+  if (isSmallScreen) {
+    return (
+      <div className="min-h-screen bg-[#F5F7FA]">
+        <MobileAppContainer
+          currentAgent={selectedAgent}
+          allAgents={users}
+          presences={presences}
+          pointages={pointages}
+          onPerformCheckIn={handlePerformCheckIn}
+          onPerformCheckOut={handlePerformCheckOut}
+          onOpenCameraModal={() => setIsCameraModalOpen(true)}
+          photoCaptured={photoCaptured}
+          onInspectPhoto={(ptg) => setInspectPointage(ptg)}
+          isCheckedIn={isCheckedIn}
+          checkInTime={checkInTime}
+          onRegisterNewAgent={handleRegisterNewAgent}
+          onSelectAgent={(agent) => setSelectedAgent(agent)}
+          onUpdateAgentPhoto={handleUpdateAgentPhoto}
+          isNativeMobile={true}
+        />
+        {isCameraModalOpen && (
+          <CameraModal
+            isOpen={isCameraModalOpen}
+            onClose={() => setIsCameraModalOpen(false)}
+            onCapturePhoto={(photoData) => {
+              setPhotoCaptured(photoData);
+              setIsCameraModalOpen(false);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] text-gray-900 font-poppins flex flex-col">
-      {/* Top Header Navbar - Only visible on desktop/tablets for preview and role-switching */}
-      {!isSmallScreen && (
-        <Navbar
-          currentMode={currentMode}
-          onModeChange={(mode) => setCurrentMode(mode)}
-          currentUser={selectedAgent}
-          allAgents={users}
-          onSelectAgent={(ag) => setSelectedAgent(ag)}
-          onResetData={handleResetData}
-          onLogoutRH={handleLogoutRH}
-          isRhAuthenticated={isRhAuthenticated}
-          currentAdmin={currentAdmin}
-        />
-      )}
-
-      {/* Main Mode Renderer */}
-      {currentMode === 'web' && !isSmallScreen ? (
-        !isRhAuthenticated ? (
-          <RhLoginView
-            onLoginSuccess={handleRhLoginSuccess}
-            availableAdmins={admins}
-          />
-        ) : (
-          <div className="flex flex-1">
-            {/* Web Dashboard Left Sidebar */}
-            <Sidebar
-              activeTab={activeWebTab}
-              onSelectTab={(tab) => setActiveWebTab(tab)}
-              onOpenAddModal={() => setIsAddEmployeeModalOpen(true)}
-              totalEmployeesCount={users.length}
-              onLogoutRH={handleLogoutRH}
-            />
-
-            {/* Web Main Content Area */}
-            <main className="flex-1 overflow-x-hidden pb-12">
-              {activeWebTab === 'dashboard' && (
-                <DashboardView
-                  users={users}
-                  presences={presences}
-                  pointages={pointages}
-                  onNavigate={(tab) => setActiveWebTab(tab)}
-                  onInspectPhoto={(ptg) => setInspectPointage(ptg)}
-                />
-              )}
-
-              {activeWebTab === 'employees' && (
-                <EmployeesView
-                  users={users}
-                  equipes={equipes}
-                  onOpenAddModal={() => setIsAddEmployeeModalOpen(true)}
-                  onToggleStatus={handleToggleUserStatus}
-                  onDeleteUser={handleDeleteUser}
-                />
-              )}
-
-              {activeWebTab === 'attendance' && (
-                <AttendanceView
-                  presences={presences}
-                  users={users}
-                  equipes={equipes}
-                  onInspectPhoto={(ptg) => setInspectPointage(ptg)}
-                />
-              )}
-
-              {activeWebTab === 'pointages' && (
-                <PointagesView pointages={pointages} onInspectPhoto={(ptg) => setInspectPointage(ptg)} />
-              )}
-
-              {activeWebTab === 'reports' && <ReportsView users={users} presences={presences} />}
-
-              {activeWebTab === 'payroll' && (
-                <PayrollExportView
-                  presences={presences}
-                  users={users}
-                  exportHistory={exportHistory}
-                  onAddExportHistory={(exp) => setExportHistory((prev) => [exp, ...prev])}
-                />
-              )}
-
-              {activeWebTab === 'settings' && (
-                <SettingsView equipes={equipes} onUpdateEquipes={(eqs) => setEquipes(eqs)} />
-              )}
-            </main>
+    <div className="min-h-screen bg-[#F5F7FA] font-poppins flex flex-col">
+      {/* Top Bar Header */}
+      <header className="bg-[#1F2937] text-white border-b border-gray-800 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <KlinaTopLogo variant="compact" size="sm" lightBackground={false} />
+            <div className="h-6 w-px bg-gray-700 hidden sm:block"></div>
+            <span className="text-xs text-emerald-400 font-semibold hidden sm:inline-flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-800/80 px-2.5 py-1 rounded-full">
+              <ShieldCheck className="w-3.5 h-3.5" /> Système Officiel RH
+            </span>
           </div>
-        )
-      ) : (
-        /* Mobile Mode (Edge-to-Edge on real mobile devices, Mockup on desktop) */
-        <main
-          className={
-            isSmallScreen
-              ? 'flex-1 w-full bg-[#F5F7FA]'
-              : 'flex-1 p-4 lg:p-8 flex items-center justify-center bg-gray-200/60'
-          }
-        >
+
+          {/* Navigation Items (RH Desktop) */}
+          <nav className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'dashboard'
+                  ? 'bg-[#0F9D58] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Tableau de bord
+            </button>
+            <button
+              onClick={() => setActiveTab('pointages')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'pointages'
+                  ? 'bg-[#0F9D58] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Pointages
+            </button>
+            <button
+              onClick={() => setActiveTab('presences')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'presences'
+                  ? 'bg-[#0F9D58] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Présences
+            </button>
+            <button
+              onClick={() => setActiveTab('employes')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'employes'
+                  ? 'bg-[#0F9D58] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Employés ({users.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('sites')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'sites'
+                  ? 'bg-[#0F9D58] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Sites & Équipes
+            </button>
+            <button
+              onClick={() => setActiveTab('rapports')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                activeTab === 'rapports'
+                  ? 'bg-[#0F9D58] text-white'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-800'
+              }`}
+            >
+              Paie & Rapports
+            </button>
+            <button
+              onClick={() => setActiveTab('mobile')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'mobile'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-emerald-400 hover:bg-emerald-950/50'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Simulateur Mobile</span>
+            </button>
+          </nav>
+
+          {/* Admin User Profile or Login Trigger */}
+          <div className="flex items-center gap-2">
+            {currentAdmin ? (
+              <div className="flex items-center gap-2.5 bg-gray-800/80 border border-gray-700 px-3 py-1.5 rounded-xl">
+                <div className="w-7 h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center text-xs font-bold">
+                  {currentAdmin.nom.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="text-left hidden md:block">
+                  <p className="text-xs font-bold text-white leading-tight">{currentAdmin.nom}</p>
+                  <p className="text-[10px] text-emerald-400 font-medium">{currentAdmin.role}</p>
+                </div>
+                <button
+                  onClick={handleAdminLogout}
+                  title="Se déconnecter"
+                  className="text-gray-400 hover:text-rose-400 p-1 rounded-md transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsRhLoginModalOpen(true)}
+                className="flex items-center gap-1.5 bg-[#0F9D58] hover:bg-[#0c8047] text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                <FolderLock className="w-3.5 h-3.5" />
+                <span>Connexion RH</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content View Switcher */}
+      {activeTab === 'mobile' ? (
+        <main className="flex-1 py-6 px-4">
           <MobileAppContainer
             currentAgent={selectedAgent}
             allAgents={users}
@@ -463,43 +526,134 @@ export default function App() {
             onInspectPhoto={(ptg) => setInspectPointage(ptg)}
             isCheckedIn={isCheckedIn}
             checkInTime={checkInTime}
-            onRegisterNewAgent={async (newUser) => {
-              setUsers((prev) => [newUser, ...prev]);
-              setSelectedAgent(newUser);
-              try {
-                await registerUserInFirestore(newUser);
-              } catch (err) {
-                console.error('Error saving registered agent to Firestore:', err);
-              }
-            }}
+            onRegisterNewAgent={handleRegisterNewAgent}
             onSelectAgent={(agent) => setSelectedAgent(agent)}
+            onUpdateAgentPhoto={handleUpdateAgentPhoto}
             isNativeMobile={isSmallScreen}
           />
         </main>
+      ) : (
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 space-y-6">
+          {activeTab === 'dashboard' && (
+            <>
+              <DashboardHeader
+                onAddEmployeeClick={() => setIsAddEmployeeModalOpen(true)}
+                onAddSiteClick={() => setIsAddSiteModalOpen(true)}
+              />
+              <DashboardStats
+                pointages={pointages}
+                presences={presences}
+                users={users}
+              />
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                  <LiveTrackingCard
+                    pointages={pointages}
+                    onInspectPhoto={(ptg) => setInspectPointage(ptg)}
+                  />
+                  <PresencesTable
+                    presences={presences}
+                    onInspectPhoto={(ptg) => setInspectPointage(ptg)}
+                  />
+                </div>
+                <div className="space-y-6">
+                  <QuickActions
+                    onOpenAddEmployee={() => setIsAddEmployeeModalOpen(true)}
+                    onOpenAddSite={() => setIsAddSiteModalOpen(true)}
+                    onOpenMobileSim={() => setActiveTab('mobile')}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {activeTab === 'pointages' && (
+            <PointagesTable
+              pointages={pointages}
+              onInspectPhoto={(ptg) => setInspectPointage(ptg)}
+            />
+          )}
+
+          {activeTab === 'presences' && (
+            <PresencesTable
+              presences={presences}
+              onInspectPhoto={(ptg) => setInspectPointage(ptg)}
+            />
+          )}
+
+          {activeTab === 'employes' && (
+            <EmployeesView
+              users={users}
+              equipes={equipes}
+              onAddEmployeeClick={() => setIsAddEmployeeModalOpen(true)}
+              onDeleteUser={handleDeleteUser}
+            />
+          )}
+
+          {activeTab === 'sites' && (
+            <SitesView
+              equipes={equipes}
+              onAddSiteClick={() => setIsAddSiteModalOpen(true)}
+            />
+          )}
+
+          {activeTab === 'rapports' && (
+            <RapportsView
+              users={users}
+              pointages={pointages}
+              presences={presences}
+              exportHistory={exportHistory}
+              onAddExportRecord={(rec) => setExportHistory((prev) => [rec, ...prev])}
+            />
+          )}
+        </main>
       )}
 
-      {/* Modals */}
-      <AddEmployeeModal
-        isOpen={isAddEmployeeModalOpen}
-        onClose={() => setIsAddEmployeeModalOpen(false)}
-        equipes={equipes}
-        onAddEmployee={handleAddEmployee}
-      />
+      {/* Global Modals */}
+      {isCameraModalOpen && (
+        <CameraModal
+          isOpen={isCameraModalOpen}
+          onClose={() => setIsCameraModalOpen(false)}
+          onCapturePhoto={(photoData) => {
+            setPhotoCaptured(photoData);
+            setIsCameraModalOpen(false);
+          }}
+        />
+      )}
 
-      <CameraModal
-        isOpen={isCameraModalOpen}
-        onClose={() => setIsCameraModalOpen(false)}
-        onCapture={(dataUrl) => {
-          setPhotoCaptured(dataUrl);
-          setIsCameraModalOpen(false);
-        }}
-      />
+      {inspectPointage && (
+        <PhotoInspectionModal
+          isOpen={!!inspectPointage}
+          onClose={() => setInspectPointage(null)}
+          pointage={inspectPointage}
+        />
+      )}
 
-      <PhotoDetailModal
-        isOpen={!!inspectPointage}
-        onClose={() => setInspectPointage(null)}
-        pointage={inspectPointage}
-      />
+      {isAddEmployeeModalOpen && (
+        <AddEmployeeModal
+          isOpen={isAddEmployeeModalOpen}
+          onClose={() => setIsAddEmployeeModalOpen(false)}
+          equipes={equipes}
+          onAddEmployee={handleAddEmployee}
+        />
+      )}
+
+      {isAddSiteModalOpen && (
+        <AddSiteModal
+          isOpen={isAddSiteModalOpen}
+          onClose={() => setIsAddSiteModalOpen(false)}
+          onAddSite={handleAddSite}
+        />
+      )}
+
+      {isRhLoginModalOpen && (
+        <RhLoginModal
+          isOpen={isRhLoginModalOpen}
+          onClose={() => setIsRhLoginModalOpen(false)}
+          onLogin={handleAdminLogin}
+          adminsList={adminsList}
+        />
+      )}
     </div>
   );
 }

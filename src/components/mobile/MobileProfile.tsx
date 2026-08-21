@@ -12,9 +12,7 @@ import {
   RefreshCw,
   Check,
   X,
-  AlertCircle,
-  Sparkles,
-  Image as ImageIcon
+  AlertCircle
 } from 'lucide-react';
 import { User } from '../../types';
 
@@ -36,7 +34,6 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Stop camera when modal or mode changes
   const stopCameraStream = () => {
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
