@@ -8,10 +8,35 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="description" content="KlinaTop - Solution de pointage et de suivi terrain pour entreprises de nettoyage" />
     <title>KlinaTop - Pointage & Suivi Terrain</title>
+    
+    <!-- Police Poppins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+    
+    <!-- Chargement direct de Tailwind CSS pour un rendu parfait immédiat -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Poppins', 'sans-serif'],
+              poppins: ['Poppins', 'sans-serif'],
+            },
+            colors: {
+              klinatop: {
+                green: '#0F9D58',
+                dark: '#1F2937',
+              }
+            }
+          }
+        }
+      }
+    </script>
   </head>
-  <body class="bg-gray-100 text-gray-900 antialiased selection:bg-emerald-500 selection:text-white">
+  <body class="bg-gray-900 text-gray-100 antialiased selection:bg-emerald-500 selection:text-white font-sans">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
