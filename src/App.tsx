@@ -98,14 +98,29 @@ export default function App() {
         // keep selected agent in sync if found
         setSelectedAgent((curr) => {
           try {
+            const savedUser = localStorage.getItem('klinatop_logged_agent_user');
             const savedId = localStorage.getItem('klinatop_logged_agent_id');
-            if (savedId) {
-              const savedMatch = firestoreUsers.find((u) => u.id === savedId);
-              if (savedMatch) return savedMatch;
+            const targetId = (savedUser ? JSON.parse(savedUser)?.id : null) || savedId || (curr ? curr.id : null);
+            if (targetId) {
+              const savedMatch = firestoreUsers.find((u) => u.id === targetId);
+              if (savedMatch) {
+                try {
+                  localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(savedMatch));
+                  localStorage.setItem('klinatop_logged_agent_id', savedMatch.id);
+                } catch (e) {}
+                return savedMatch;
+              }
             }
-          } catch {}
+          } catch (e) {}
           const match = curr ? firestoreUsers.find((u) => u.id === curr.id) : null;
-          return match || firestoreUsers[0] || curr;
+          const finalUser = match || curr || firestoreUsers[0];
+          if (finalUser) {
+            try {
+              localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(finalUser));
+              localStorage.setItem('klinatop_logged_agent_id', finalUser.id);
+            } catch (e) {}
+          }
+          return finalUser;
         });
       }
     });
@@ -165,12 +180,21 @@ export default function App() {
   // Active Agent for Mobile Simulation with persistent fallback
   const [selectedAgent, setSelectedAgent] = useState<User>(() => {
     try {
+      const savedUser = localStorage.getItem('klinatop_logged_agent_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id && parsed.nom) {
+          return parsed;
+        }
+      }
       const savedId = localStorage.getItem('klinatop_logged_agent_id');
       if (savedId) {
         const found = initialUsers.find((u) => u.id === savedId);
         if (found) return found;
       }
-    } catch {}
+    } catch (e) {
+      console.warn('Error reading saved agent user from localStorage', e);
+    }
     return initialUsers[0];
   });
   const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
@@ -277,7 +301,7 @@ export default function App() {
       formattedDate: dateStr,
       latitude: 6.3532,
       longitude: 2.4211,
-      adresse: 'Site KlinaTop, Cotonou',
+      adresse: 'Boulevard de la Marina, Cotonou, Bénin',
       siteName: 'Site KlinaTop Main',
       photoUrl,
     };
@@ -287,23 +311,23 @@ export default function App() {
 
     const presenceUpdate: Partial<Presence> = {
       heureCheckout: timeStr,
-      photoCheckoutUrl: photoUrl,
-      duree: '8h 15m',
-      statut: 'présent',
+      statut: 'terminé',
+      duree: '8h 00m',
+      dureeMinutes: 480,
     };
 
-    setPresences((prev) => {
-      const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = {
-          ...updated[existingIndex],
-          ...presenceUpdate,
-        };
-        return updated;
-      }
-      return prev;
-    });
+    // Update presence sheet
+    setPresences((prev) =>
+      prev.map((p) => {
+        if (p.userId === selectedAgent.id) {
+          return {
+            ...p,
+            ...presenceUpdate,
+          };
+        }
+        return p;
+      })
+    );
 
     setIsCheckedIn(false);
     setPhotoCaptured(null);
@@ -316,7 +340,6 @@ export default function App() {
     }
   };
 
-  // Employee CRUD handlers
   const handleAddEmployee = async (newEmp: User) => {
     setUsers((prev) => [newEmp, ...prev]);
     try {
@@ -339,13 +362,30 @@ export default function App() {
     );
   };
 
+  const handleSelectAgent = (agent: User) => {
+    try {
+      localStorage.setItem('klinatop_logged_agent_id', agent.id);
+      localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(agent));
+    } catch (e) {}
+    setSelectedAgent(agent);
+  };
+
   const handleUpdateAgentPhoto = async (userId: string, photoUrl: string) => {
     // Update users list
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, photoUrl } : u))
     );
     // Update selected agent if matches
-    setSelectedAgent((curr) => (curr.id === userId ? { ...curr, photoUrl } : curr));
+    setSelectedAgent((curr) => {
+      if (curr.id === userId) {
+        const updated = { ...curr, photoUrl };
+        try {
+          localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(updated));
+        } catch (e) {}
+        return updated;
+      }
+      return curr;
+    });
     // Persist to Cloud Firestore
     try {
       await updateUserInFirestore(userId, { photoUrl });
@@ -399,7 +439,7 @@ export default function App() {
           onModeChange={(mode) => setCurrentMode(mode)}
           currentUser={selectedAgent}
           allAgents={users}
-          onSelectAgent={(ag) => setSelectedAgent(ag)}
+          onSelectAgent={handleSelectAgent}
           onResetData={handleResetData}
           onLogoutRH={handleLogoutRH}
           isRhAuthenticated={isRhAuthenticated}
@@ -413,6 +453,7 @@ export default function App() {
           <RhLoginView
             onLoginSuccess={handleRhLoginSuccess}
             availableAdmins={admins}
+            onSwitchToAgentApp={() => setCurrentMode('mobile')}
           />
         ) : (
           <div className="flex flex-1">
@@ -500,14 +541,14 @@ export default function App() {
             checkInTime={checkInTime}
             onRegisterNewAgent={async (newUser) => {
               setUsers((prev) => [newUser, ...prev]);
-              setSelectedAgent(newUser);
+              handleSelectAgent(newUser);
               try {
                 await registerUserInFirestore(newUser);
               } catch (err) {
                 console.error('Error saving registered agent to Firestore:', err);
               }
             }}
-            onSelectAgent={(agent) => setSelectedAgent(agent)}
+            onSelectAgent={handleSelectAgent}
             onUpdateAgentPhoto={handleUpdateAgentPhoto}
             isNativeMobile={isSmallScreen}
           />

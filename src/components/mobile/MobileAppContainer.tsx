@@ -56,11 +56,13 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   // Sync login and agent state when Firestore finishes loading
   useEffect(() => {
     try {
+      const savedUserStr = localStorage.getItem('klinatop_logged_agent_user');
       const savedId = localStorage.getItem('klinatop_logged_agent_id');
-      if (savedId) {
+      const targetId = (savedUserStr ? JSON.parse(savedUserStr)?.id : null) || savedId;
+      if (targetId) {
         setIsLoggedIn(true);
         if (allAgents && allAgents.length > 0) {
-          const found = allAgents.find((a) => a.id === savedId);
+          const found = allAgents.find((a) => a.id === targetId);
           if (found && onSelectAgent) {
             onSelectAgent(found);
           }
@@ -70,10 +72,20 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
       console.warn('Sync session error', e);
     }
   }, [allAgents, onSelectAgent]);
+
   const [activeTab, setActiveTab] = useState<MobileTab>('home');
   const [subView, setSubView] = useState<'checkin' | 'checkout'>('checkin');
 
-  const safeAgent: User = currentAgent || (allAgents && allAgents[0]) || {
+  const safeAgent: User = currentAgent || (() => {
+    try {
+      const savedUser = localStorage.getItem('klinatop_logged_agent_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && parsed.id && parsed.nom) return parsed;
+      }
+    } catch {}
+    return (allAgents && allAgents[0]);
+  })() || {
     id: 'emp-fallback',
     nom: 'Agent Terrain',
     email: 'agent@klinatop.bj',
@@ -111,6 +123,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
           onLogin={(agent) => {
             try {
               localStorage.setItem('klinatop_logged_agent_id', agent.id);
+              localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(agent));
             } catch (e) {}
             if (onSelectAgent) onSelectAgent(agent);
             setIsLoggedIn(true);
@@ -118,6 +131,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
           onRegisterAgent={(newUser) => {
             try {
               localStorage.setItem('klinatop_logged_agent_id', newUser.id);
+              localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(newUser));
             } catch (e) {}
             if (onRegisterNewAgent) onRegisterNewAgent(newUser);
             if (onSelectAgent) onSelectAgent(newUser);
@@ -192,6 +206,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
                 onLogout={() => {
                   try {
                     localStorage.removeItem('klinatop_logged_agent_id');
+                    localStorage.removeItem('klinatop_logged_agent_user');
                   } catch (e) {}
                   setIsLoggedIn(false);
                 }}
@@ -228,6 +243,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
             onLogout={() => {
               try {
                 localStorage.removeItem('klinatop_logged_agent_id');
+                localStorage.removeItem('klinatop_logged_agent_user');
               } catch (e) {}
               setIsLoggedIn(false);
             }}
