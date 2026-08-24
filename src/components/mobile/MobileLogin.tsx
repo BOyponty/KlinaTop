@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, Phone, Mail, UserPlus, CheckCircle2, AlertCircle, KeyRound, ArrowLeft, Camera, Upload, RefreshCw, X, Check } from 'lucide-react';
+import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, Phone, Mail, UserPlus, CheckCircle2, AlertCircle, KeyRound, ArrowLeft, Camera, Upload, RefreshCw, X } from 'lucide-react';
 import { User } from '../../types';
-import { KlinaTopLogo } from '../common/KlinaTopLogo';
+import logoImg from '../../assets/images/klinatop_logo_1786547596570.jpg';
 
 interface MobileLoginProps {
   onLogin: (agent: User) => void;
@@ -38,7 +38,6 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
   // Forgot password state
   const [forgotQuery, setForgotQuery] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState(false);
-  const [forgotHelpContact, setForgotHelpContact] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -127,7 +126,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
 
     if (!cleanInput) {
       setErrorField('identifier');
-      setErrorMsg("Veuillez renseigner votre Numéro de téléphone ou Nom d'agent.");
+      setErrorMsg("Veuillez renseigner votre Numéro de téléphone ou Email.");
       return;
     }
 
@@ -147,7 +146,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
 
     if (!matchedAgent) {
       setErrorField('identifier');
-      setErrorMsg("Aucun agent trouvé avec ces coordonnées. Veuillez créer votre compte d'abord via le bouton « Créer un compte ».");
+      setErrorMsg("Aucun agent trouvé avec ces coordonnées. Veuillez d'abord créer votre compte via l'onglet « Créer un compte ».");
       return;
     }
 
@@ -161,7 +160,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     setSuccessMsg(`Connexion réussie ! Bienvenue ${matchedAgent.nom}`);
     setTimeout(() => {
       onLogin(matchedAgent);
-    }, 600);
+    }, 500);
   };
 
   // 2. Inscription d'un nouvel agent avec photo
@@ -177,7 +176,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
 
     if (!cleanNom) {
       setErrorField('regNom');
-      setErrorMsg("Veuillez saisir votre Nom et Prénom.");
+      setErrorMsg("Veuillez saisir votre Nom & Prénom.");
       return;
     }
 
@@ -204,14 +203,14 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       id: `usr-${Date.now()}`,
       nom: cleanNom,
       role: 'agent',
-      statut: 'hors_service',
+      poste: "Agent d'Entretien",
+      equipeId: 'eq-1',
+      equipeNom: regEquipe,
+      statut: 'Actif',
       telephone: cleanPhone,
       email: regEmail.trim() || `${cleanNom.toLowerCase().replace(/\s+/g, '.')}@klinatop.bj`,
-      equipe: regEquipe,
       photoUrl: regPhoto || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
       initiales: initials,
-      heuresSemaine: '0.0h',
-      dernierePresence: 'Jamais',
       motDePasse: cleanPass,
     };
 
@@ -221,11 +220,11 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
 
     setTimeout(() => {
       setIsSubmitting(false);
-      setSuccessMsg(`Compte créé avec succès ! Bienvenue dans l'équipe KlinaTop, ${cleanNom}.`);
+      setSuccessMsg(`Compte créé avec succès ! Bienvenue dans l'équipe, ${cleanNom}.`);
       setTimeout(() => {
         onLogin(newAgent);
-      }, 1000);
-    }, 600);
+      }, 800);
+    }, 500);
   };
 
   // 3. Récupération mot de passe
@@ -237,7 +236,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     const q = forgotQuery.trim().toLowerCase();
     if (!q) {
       setErrorField('forgotQuery');
-      setErrorMsg('Veuillez entrer votre numéro de téléphone ou nom.');
+      setErrorMsg('Veuillez entrer votre numéro de téléphone ou email.');
       return;
     }
 
@@ -254,27 +253,30 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       return;
     }
 
-    setForgotHelpContact(matched.telephone || 'Non renseigné');
     setForgotSuccess(true);
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#F4F6F8] font-poppins p-4 overflow-y-auto">
-      {/* Header Logo */}
-      <div className="flex flex-col items-center pt-2 pb-3">
-        <div className="bg-white p-2.5 rounded-2xl shadow-sm border border-gray-100 mb-2">
-          <KlinaTopLogo size={50} showTagline={true} />
+    <div className="flex flex-col min-h-full bg-[#F6F8FA] font-poppins px-4 py-3 justify-between">
+      {/* 1. Header with Compact Clean Logo */}
+      <div className="flex flex-col items-center pt-1 pb-2">
+        <div className="w-14 h-14 bg-white rounded-2xl shadow-xs border border-gray-100 p-1.5 flex items-center justify-center mb-2">
+          <img
+            src={logoImg}
+            alt="KlinaTop"
+            className="w-full h-full object-contain"
+          />
         </div>
-        <div className="bg-[#E6F4EA] border border-[#0F9D58]/30 px-3 py-1 rounded-full">
+        <div className="bg-[#E6F4EA] border border-[#0F9D58]/30 px-3.5 py-1 rounded-full">
           <span className="text-[11px] font-extrabold text-[#0F9D58] tracking-wider uppercase">
             ESPACE AGENT DE TERRAIN
           </span>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* 2. Mode Navigation Tabs */}
       {mode !== 'forgot_password' && (
-        <div className="flex bg-gray-200/80 p-1 rounded-xl mb-3">
+        <div className="bg-gray-200/70 p-1 rounded-2xl flex gap-1 mb-3">
           <button
             type="button"
             onClick={() => {
@@ -283,10 +285,10 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
               setSuccessMsg('');
               stopRegCamera();
             }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
               mode === 'login'
-                ? 'bg-white text-gray-800 shadow-xs'
-                : 'text-gray-500 hover:text-gray-800'
+                ? 'bg-[#0F9D58] text-white shadow-xs'
+                : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             Se connecter
@@ -298,10 +300,10 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
               setErrorMsg('');
               setSuccessMsg('');
             }}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
               mode === 'register'
                 ? 'bg-[#0F9D58] text-white shadow-xs'
-                : 'text-gray-500 hover:text-gray-800'
+                : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             Créer un compte
@@ -311,31 +313,26 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
 
       {/* Alert Messages */}
       {errorMsg && (
-        <div className="mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-700 text-xs animate-shake">
+        <div className="mb-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-700 text-xs animate-shake">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
           <p className="font-medium leading-relaxed">{errorMsg}</p>
         </div>
       )}
 
       {successMsg && (
-        <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 text-xs">
+        <div className="mb-2.5 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 text-emerald-800 text-xs">
           <CheckCircle2 className="w-4 h-4 shrink-0 text-[#0F9D58]" />
           <p className="font-semibold">{successMsg}</p>
         </div>
       )}
 
-      {/* MODE 1: LOGIN FORM */}
+      {/* 3. MODE 1: LOGIN FORM (Exact match to original screenshot) */}
       {mode === 'login' && (
-        <form onSubmit={handleLoginSubmit} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3.5 my-auto">
-          <div className="text-center pb-1 border-b border-gray-100">
-            <p className="text-xs font-bold text-gray-800">Identification Agent de Propreté</p>
-            <p className="text-[10px] text-gray-500">Accédez à votre caméra pour pointer vos heures</p>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-gray-700">Téléphone ou Nom d'Agent *</label>
+        <form onSubmit={handleLoginSubmit} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-4 my-auto">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-gray-800">Numéro de téléphone ou Email Agent</label>
             <div className="relative">
-              <Phone className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'identifier' ? 'text-rose-500' : 'text-gray-400'}`} />
+              <Phone className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${errorField === 'identifier' ? 'text-rose-500' : 'text-gray-400'}`} />
               <input
                 type="text"
                 required
@@ -344,19 +341,19 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   setIdentifier(e.target.value);
                   if (errorField === 'identifier') setErrorField(null);
                 }}
-                placeholder="ex: +229 97 00 00 00 ou KOKO"
-                className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs font-medium outline-none transition-all ${
+                placeholder="ex. +229 97 00 00 00 ou email"
+                className={`w-full pl-10 pr-3.5 py-3 rounded-2xl text-xs font-medium outline-none transition-all ${
                   errorField === 'identifier'
-                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-2 focus:ring-rose-200'
-                    : 'border border-gray-300 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20'
+                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900'
+                    : 'border border-gray-200 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15 bg-white'
                 }`}
               />
             </div>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-semibold text-gray-700">Mot de passe Agent *</label>
+              <label className="text-xs font-semibold text-gray-800">Mot de passe ou Code secret</label>
               <button
                 type="button"
                 onClick={() => {
@@ -364,13 +361,13 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   setErrorMsg('');
                   setForgotSuccess(false);
                 }}
-                className="text-[10px] text-[#0F9D58] font-bold hover:underline cursor-pointer"
+                className="text-[11px] text-[#0F9D58] font-semibold hover:underline cursor-pointer"
               >
                 Mot de passe oublié ?
               </button>
             </div>
             <div className="relative">
-              <Lock className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'password' ? 'text-rose-500' : 'text-gray-400'}`} />
+              <Lock className={`w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 ${errorField === 'password' ? 'text-rose-500' : 'text-gray-400'}`} />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
@@ -379,38 +376,39 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   setPassword(e.target.value);
                   if (errorField === 'password') setErrorField(null);
                 }}
-                placeholder="Votre mot de passe personnel"
-                className={`w-full pl-9 pr-9 py-2 rounded-xl text-xs font-medium outline-none transition-all ${
+                placeholder="Votre mot de passe"
+                className={`w-full pl-10 pr-10 py-3 rounded-2xl text-xs font-medium outline-none transition-all ${
                   errorField === 'password'
-                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-2 focus:ring-rose-200'
-                    : 'border border-gray-300 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20'
+                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900'
+                    : 'border border-gray-200 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15 bg-white'
                 }`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-xs pt-0.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-[#0F9D58] cursor-pointer accent-[#0F9D58]"
-              />
-              <span className="text-gray-600 font-medium text-[11px]">Se souvenir de ce téléphone</span>
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="checkbox"
+              id="rememberMeCheckbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-[#0F9D58] cursor-pointer accent-[#0F9D58]"
+            />
+            <label htmlFor="rememberMeCheckbox" className="text-gray-600 font-medium text-xs cursor-pointer select-none">
+              Se souvenir de ce téléphone
             </label>
           </div>
 
           <button
             type="submit"
-            className="w-full py-3 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
+            className="w-full py-3.5 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-sm rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer mt-2"
           >
             <span>Accéder à mon espace de pointage</span>
             <ArrowRight className="w-4 h-4" />
@@ -418,22 +416,22 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
         </form>
       )}
 
-      {/* MODE 2: REGISTER FORM WITH REAL PHOTO CAPTURE */}
+      {/* 4. MODE 2: REGISTER FORM (with photo selector) */}
       {mode === 'register' && (
-        <form onSubmit={handleRegisterSubmit} className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-3 my-auto">
-          <div className="text-center pb-1 border-b border-gray-100">
-            <p className="text-xs font-bold text-gray-800">Inscription Nouveau Agent d'Entretien</p>
+        <form onSubmit={handleRegisterSubmit} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-3.5 my-auto max-h-[70vh] overflow-y-auto">
+          <div className="text-center pb-1">
+            <p className="text-xs font-bold text-gray-900">Inscription Nouveau Agent d'Entretien</p>
             <p className="text-[10px] text-gray-500">Ajoutez votre vraie photo de profil pour la transparence</p>
           </div>
 
-          {/* Photo Selector (Camera / Upload) */}
-          <div className="flex flex-col items-center justify-center p-2.5 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
+          {/* Photo Avatar with Camera/Upload Buttons */}
+          <div className="flex flex-col items-center justify-center p-3 bg-gray-50/80 rounded-2xl border border-gray-100 space-y-2">
             <div className="relative">
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#0F9D58] bg-white shadow-xs flex items-center justify-center">
                 {regPhoto ? (
                   <img src={regPhoto} alt="Aperçu" className="w-full h-full object-cover" />
                 ) : (
-                  <UserIcon className="w-7 h-7 text-gray-400" />
+                  <UserIcon className="w-8 h-8 text-gray-400" />
                 )}
               </div>
               {regPhoto && (
@@ -452,18 +450,18 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                 <div className="w-36 h-36 rounded-2xl overflow-hidden border-2 border-[#0F9D58] bg-black">
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
                 </div>
-                <div className="flex gap-1.5 w-full">
+                <div className="flex gap-2 w-full">
                   <button
                     type="button"
                     onClick={snapRegPhoto}
-                    className="flex-1 py-1.5 bg-[#0F9D58] text-white rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                    className="flex-1 py-1.5 bg-[#0F9D58] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer"
                   >
-                    <Camera className="w-3 h-3" /> Capturer
+                    <Camera className="w-3.5 h-3.5" /> Capturer
                   </button>
                   <button
                     type="button"
                     onClick={stopRegCamera}
-                    className="px-2.5 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-[11px] font-semibold cursor-pointer"
+                    className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold cursor-pointer"
                   >
                     Annuler
                   </button>
@@ -474,16 +472,16 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                 <button
                   type="button"
                   onClick={startRegCamera}
-                  className="px-2.5 py-1 bg-white border border-gray-300 hover:border-[#0F9D58] text-[#0F9D58] rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-white border border-gray-200 hover:border-[#0F9D58] text-[#0F9D58] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
                 >
-                  <Camera className="w-3 h-3" /> Prendre Photo
+                  <Camera className="w-3.5 h-3.5" /> Prendre Photo
                 </button>
                 <button
                   type="button"
                   onClick={() => regFileInputRef.current?.click()}
-                  className="px-2.5 py-1 bg-white border border-gray-300 hover:border-gray-400 text-gray-700 rounded-lg text-[11px] font-bold flex items-center gap-1 shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
                 >
-                  <Upload className="w-3 h-3 text-gray-400" /> Importer
+                  <Upload className="w-3.5 h-3.5 text-gray-400" /> Importer
                 </button>
                 <input
                   ref={regFileInputRef}
@@ -497,9 +495,9 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-gray-700">Nom & Prénom Agent *</label>
+            <label className="text-xs font-semibold text-gray-700">Nom & Prénom Agent *</label>
             <div className="relative">
-              <UserIcon className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'regNom' ? 'text-rose-500' : 'text-gray-400'}`} />
+              <UserIcon className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'regNom' ? 'text-rose-500' : 'text-gray-400'}`} />
               <input
                 type="text"
                 required
@@ -509,19 +507,19 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   if (errorField === 'regNom') setErrorField(null);
                 }}
                 placeholder="ex: DUPONT Jean"
-                className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs font-medium outline-none transition-all ${
+                className={`w-full pl-9 pr-3 py-2.5 rounded-xl text-xs font-medium outline-none transition-all ${
                   errorField === 'regNom'
-                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-2 focus:ring-rose-200'
-                    : 'border border-gray-300 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20'
+                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900'
+                    : 'border border-gray-200 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15'
                 }`}
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-gray-700">Numéro de Téléphone Mobile *</label>
+            <label className="text-xs font-semibold text-gray-700">Numéro de Téléphone Mobile *</label>
             <div className="relative">
-              <Phone className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'regPhone' ? 'text-rose-500' : 'text-gray-400'}`} />
+              <Phone className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'regPhone' ? 'text-rose-500' : 'text-gray-400'}`} />
               <input
                 type="tel"
                 required
@@ -531,33 +529,33 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   if (errorField === 'regPhone') setErrorField(null);
                 }}
                 placeholder="ex: +229 97 00 00 00"
-                className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs font-medium outline-none transition-all ${
+                className={`w-full pl-9 pr-3 py-2.5 rounded-xl text-xs font-medium outline-none transition-all ${
                   errorField === 'regPhone'
-                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-2 focus:ring-rose-200'
-                    : 'border border-gray-300 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20'
+                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900'
+                    : 'border border-gray-200 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15'
                 }`}
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-gray-700">Email professionnel (Optionnel)</label>
+            <label className="text-xs font-semibold text-gray-700">Email professionnel (Optionnel)</label>
             <div className="relative">
-              <Mail className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="email"
                 value={regEmail}
                 onChange={(e) => setRegEmail(e.target.value)}
                 placeholder="ex: jean.dupont@klinatop.bj"
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-300 text-xs font-medium focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20 outline-none transition-all"
+                className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-xs font-medium focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15 outline-none transition-all"
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-gray-700">Créer un Mot de passe Agent *</label>
+            <label className="text-xs font-semibold text-gray-700">Créer un Mot de passe Agent *</label>
             <div className="relative">
-              <Lock className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'regPassword' ? 'text-rose-500' : 'text-gray-400'}`} />
+              <Lock className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'regPassword' ? 'text-rose-500' : 'text-gray-400'}`} />
               <input
                 type="password"
                 required
@@ -567,21 +565,21 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   if (errorField === 'regPassword') setErrorField(null);
                 }}
                 placeholder="Au moins 4 caractères"
-                className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs font-medium outline-none transition-all ${
+                className={`w-full pl-9 pr-3 py-2.5 rounded-xl text-xs font-medium outline-none transition-all ${
                   errorField === 'regPassword'
-                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-2 focus:ring-rose-200'
-                    : 'border border-gray-300 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20'
+                    ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900'
+                    : 'border border-gray-200 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15'
                 }`}
               />
             </div>
           </div>
 
           <div className="space-y-1">
-            <label className="text-[11px] font-semibold text-gray-700">Équipe / Site Affecté</label>
+            <label className="text-xs font-semibold text-gray-700">Équipe / Site Affecté</label>
             <select
               value={regEquipe}
               onChange={(e) => setRegEquipe(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-gray-300 text-xs font-medium focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20 outline-none bg-white transition-all"
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-xs font-medium focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15 outline-none bg-white transition-all"
             >
               <option value="Équipe Alpha (Cotonou)">Équipe Alpha (Cotonou)</option>
               <option value="Équipe Bravo (Akpakpa)">Équipe Bravo (Akpakpa)</option>
@@ -593,7 +591,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer disabled:opacity-50"
+            className="w-full py-3 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-sm rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -605,9 +603,9 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
         </form>
       )}
 
-      {/* MODE 3: FORGOT PASSWORD */}
+      {/* 5. MODE 3: FORGOT PASSWORD */}
       {mode === 'forgot_password' && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 space-y-4 my-auto">
+        <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-4 my-auto">
           <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
             <button
               type="button"
@@ -616,7 +614,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                 setErrorMsg('');
                 setForgotSuccess(false);
               }}
-              className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 cursor-pointer"
+              className="p-1.5 hover:bg-gray-100 rounded-xl text-gray-500 cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
@@ -626,10 +624,10 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
           {!forgotSuccess ? (
             <form onSubmit={handleForgotSubmit} className="space-y-3">
               <p className="text-xs text-gray-600">
-                Saisissez votre numéro de téléphone ou nom d'agent pour obtenir votre mot de passe temporaire ou contacter votre responsable RH.
+                Saisissez votre numéro de téléphone ou nom d'agent pour réinitialiser ou retrouver votre accès.
               </p>
               <div className="relative">
-                <Phone className={`w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'forgotQuery' ? 'text-rose-500' : 'text-gray-400'}`} />
+                <Phone className={`w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 ${errorField === 'forgotQuery' ? 'text-rose-500' : 'text-gray-400'}`} />
                 <input
                   type="text"
                   required
@@ -639,24 +637,24 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                     if (errorField === 'forgotQuery') setErrorField(null);
                   }}
                   placeholder="ex: +229 97 00 00 00"
-                  className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs font-medium outline-none transition-all ${
+                  className={`w-full pl-9 pr-3 py-2.5 rounded-xl text-xs font-medium outline-none transition-all ${
                     errorField === 'forgotQuery'
-                      ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900 focus:ring-2 focus:ring-rose-200'
-                      : 'border border-gray-300 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/20'
+                      ? 'border-2 border-rose-500 bg-rose-50/40 text-rose-900'
+                      : 'border border-gray-200 focus:border-[#0F9D58] focus:ring-2 focus:ring-[#0F9D58]/15'
                   }`}
                 />
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-xs rounded-2xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <KeyRound className="w-4 h-4" />
                 <span>Rechercher mon compte</span>
               </button>
             </form>
           ) : (
-            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs space-y-2 text-emerald-800">
+            <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs space-y-2 text-emerald-800">
               <div className="flex items-center gap-2 font-bold">
                 <CheckCircle2 className="w-4 h-4 text-[#0F9D58]" />
                 <span>Agent identifié avec succès</span>
@@ -670,7 +668,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   setMode('login');
                   setForgotSuccess(false);
                 }}
-                className="w-full py-2 mt-2 bg-[#0F9D58] text-white font-bold rounded-lg text-xs hover:bg-[#0c8047] transition-all cursor-pointer"
+                className="w-full py-2.5 mt-2 bg-[#0F9D58] text-white font-bold rounded-xl text-xs hover:bg-[#0c8047] transition-all cursor-pointer"
               >
                 Se connecter avec ce mot de passe
               </button>
@@ -679,10 +677,10 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
         </div>
       )}
 
-      {/* Footer Support */}
-      <div className="text-center pt-3 mt-auto">
-        <p className="text-[10px] text-gray-500">
-          Assistance technique KlinaTop RH : <strong className="text-[#0F9D58]">+229 01 97 00 00</strong>
+      {/* 6. Footer Support */}
+      <div className="text-center pt-2 pb-1">
+        <p className="text-[11px] text-gray-500 font-medium">
+          Assistance technique KlinaTop RH : <strong className="text-[#0F9D58] font-bold">+229 01 97 00 00</strong>
         </p>
       </div>
     </div>
