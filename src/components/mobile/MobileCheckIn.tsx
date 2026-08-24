@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Camera, Clock, Navigation, CheckCircle, ArrowRight, ShieldCheck, RefreshCw } from 'lucide-react';
+import {
+  MapPin,
+  Camera,
+  Navigation,
+  CheckCircle,
+  ShieldCheck,
+  RefreshCw,
+  ExternalLink,
+  Satellite,
+  AlertTriangle,
+} from 'lucide-react';
 import { User } from '../../types';
+import { getCurrentGpsLocation, GpsLocationResult, DEFAULT_BENIN_LOCATION } from '../../lib/geoService';
 
 interface MobileCheckInProps {
   agent: User;
-  onPerformCheckIn: (photoUrl: string, address: string) => void;
+  onPerformCheckIn: (photoUrl: string, address: string, coords?: { lat: number; lng: number }) => void;
   onOpenCameraModal: () => void;
   photoCaptured: string | null;
   onGoToCheckoutScreen: () => void;
@@ -26,8 +37,12 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
   const [currentTime, setCurrentTime] = useState('');
   const [currentDate, setCurrentDate] = useState('');
   const [greeting, setGreeting] = useState<'Bonjour' | 'Bonsoir'>('Bonjour');
-  const [address, setAddress] = useState('Avenue Jean Paul II, Cotonou, Bénin');
+  
+  // Real GPS state
+  const [gpsLocation, setGpsLocation] = useState<GpsLocationResult>(DEFAULT_BENIN_LOCATION);
   const [isLocating, setIsLocating] = useState(false);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const [gpsAcquired, setGpsAcquired] = useState(false);
 
   useEffect(() => {
     const updateTime = () => {
@@ -47,21 +62,26 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
     return () => clearInterval(interval);
   }, []);
 
-  const handleGetLocation = () => {
+  // Fetch real GPS on mount
+  useEffect(() => {
+    fetchRealLocation();
+  }, []);
+
+  const fetchRealLocation = async () => {
     setIsLocating(true);
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setIsLocating(false);
-          setAddress(`Avenue Jean Paul II, Cotonou, Bénin (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`);
-        },
-        () => {
-          setIsLocating(false);
-          setAddress('Avenue Jean Paul II, Cotonou, Bénin');
-        },
-        { timeout: 5000 }
+    setGpsError(null);
+    try {
+      const loc = await getCurrentGpsLocation();
+      setGpsLocation(loc);
+      setGpsAcquired(loc.isLive);
+    } catch (err: any) {
+      console.warn('Real GPS fetch error:', err);
+      setGpsError(
+        err?.code === 1
+          ? 'Autorisation GPS refusée. Veuillez autoriser la géolocalisation dans votre navigateur pour détecter votre position exacte.'
+          : 'Recherche du signal satellite en cours. Position estimée chargée.'
       );
-    } else {
+    } finally {
       setIsLocating(false);
     }
   };
@@ -82,7 +102,11 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
           className="flex items-center gap-1.5 p-1 rounded-full hover:bg-gray-100 transition-all cursor-pointer border border-transparent hover:border-gray-200"
         >
           <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#0F9D58] shadow-xs">
-            <img src={agent.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'} alt={agent.nom} className="w-full h-full object-cover" />
+            <img
+              src={agent.photoUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200'}
+              alt={agent.nom}
+              className="w-full h-full object-cover"
+            />
           </div>
         </button>
       </div>
@@ -114,48 +138,93 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
           {currentTime || '08:00:00'}
         </div>
 
-        <p className="text-xs text-gray-400 font-medium">Équipe: {agent.equipeNom || 'Équipe Alpha (Cotonou)'}</p>
+        <p className="text-[11px] text-gray-400 font-medium">Équipe: {agent.equipeNom}</p>
       </div>
 
-      {/* GPS Location Card */}
+      {/* Real Position Détectée Card */}
       <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
-            <MapPin className="w-4 h-4 text-[#0F9D58]" />
-            <span>Position détectée</span>
+          <div className="flex items-center gap-2 text-gray-900 font-bold text-xs">
+            <div className={`p-1.5 rounded-lg ${gpsAcquired ? 'bg-emerald-100 text-[#0F9D58]' : 'bg-blue-50 text-blue-600'}`}>
+              <MapPin className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="block">Position GPS exacte</span>
+              <span className="text-[10px] font-normal text-gray-500">
+                {gpsAcquired ? (
+                  <span className="text-emerald-600 font-semibold inline-flex items-center gap-1">
+                    <Satellite className="w-3 h-3" /> Signal verrouillé (Précision ±{gpsLocation.accuracy}m)
+                  </span>
+                ) : (
+                  'Recherche du signal satellite...'
+                )}
+              </span>
+            </div>
           </div>
           <button
-            onClick={handleGetLocation}
+            onClick={fetchRealLocation}
             disabled={isLocating}
-            className="text-[11px] text-[#0F9D58] font-bold hover:underline flex items-center gap-1 cursor-pointer"
+            title="Rafraîchir ma position GPS exacte"
+            className="text-[11px] text-[#0F9D58] font-bold hover:bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200 flex items-center gap-1 cursor-pointer transition-colors"
           >
-            <RefreshCw className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
-            <span>GPS</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+            <span>{isLocating ? 'Scan...' : 'GPS'}</span>
           </button>
         </div>
 
-        <div className="relative h-28 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center">
-          <img
-            src="https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=600"
-            alt="Map Preview"
-            className="w-full h-full object-cover opacity-80"
-          />
-          <div className="absolute inset-0 bg-emerald-950/20" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-[#0F9D58] text-white flex items-center justify-center shadow-lg border-2 border-white animate-bounce">
-              <Navigation className="w-5 h-5" />
+        {gpsError && (
+          <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+            <div className="flex-1">
+              <span>{gpsError}</span>
+              <button
+                onClick={fetchRealLocation}
+                className="block text-[#0F9D58] font-bold mt-1 underline cursor-pointer"
+              >
+                Autoriser / Réessayer la détection GPS
+              </button>
             </div>
           </div>
-          <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 font-medium">
-            <MapPin className="w-3 h-3 text-red-400" />
-            <span>Cotonou, Bénin</span>
+        )}
+
+        {/* Real Interactive Map Display (OpenStreetMap) */}
+        <div className="relative h-32 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 shadow-inner">
+          <iframe
+            title="Real GPS Map"
+            src={gpsLocation.osmEmbedUrl}
+            className="w-full h-full border-0"
+            loading="lazy"
+          />
+          {/* Floating Badge with Exact Coordinates */}
+          <div className="absolute top-2 left-2 bg-black/75 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 font-mono shadow-md z-10">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>
+              {gpsLocation.latitude.toFixed(5)}°, {gpsLocation.longitude.toFixed(5)}°
+            </span>
           </div>
+
+          {/* Quick Open in Google Maps */}
+          <a
+            href={gpsLocation.googleMapsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute bottom-2 right-2 bg-white/95 hover:bg-white text-gray-800 text-[10px] font-bold px-2 py-1 rounded-md shadow-md flex items-center gap-1 border border-gray-200 transition-transform active:scale-95 z-10"
+          >
+            <span>Google Maps</span>
+            <ExternalLink className="w-3 h-3 text-[#0F9D58]" />
+          </a>
         </div>
 
-        <p className="text-xs text-gray-600 font-medium leading-relaxed">{address}</p>
+        {/* Real Address Display */}
+        <div className="bg-gray-50 rounded-xl p-2.5 border border-gray-100">
+          <p className="text-xs font-semibold text-gray-800 leading-relaxed flex items-start gap-1.5">
+            <Navigation className="w-3.5 h-3.5 text-[#0F9D58] shrink-0 mt-0.5" />
+            <span>{gpsLocation.formattedAddress}</span>
+          </p>
+        </div>
       </div>
 
-      {/* Photo Capture Area */}
+      {/* Photo Capture Card */}
       <div className="bg-white rounded-2xl p-4 border border-dashed border-emerald-300 shadow-xs space-y-3">
         {photoCaptured ? (
           <div className="relative rounded-xl overflow-hidden border border-gray-200">
@@ -166,7 +235,7 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
             </div>
             <button
               onClick={onOpenCameraModal}
-              className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-xl font-medium hover:bg-black/80 flex items-center gap-1.5 backdrop-blur-xs"
+              className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-xl font-medium hover:bg-black/80 flex items-center gap-1.5 backdrop-blur-xs cursor-pointer"
             >
               <Camera className="w-3.5 h-3.5" />
               Reprendre
@@ -193,19 +262,23 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
         )}
       </div>
 
-      {/* Main Check-In CTA Button */}
+      {/* Big Green CHECK-IN Button */}
       <button
         onClick={() => {
           if (!photoCaptured) {
             onOpenCameraModal();
             return;
           }
-          onPerformCheckIn(photoCaptured, address);
+          onPerformCheckIn(photoCaptured, gpsLocation.formattedAddress, {
+            lat: gpsLocation.latitude,
+            lng: gpsLocation.longitude,
+          });
         }}
-        className="w-full py-4 rounded-2xl bg-[#0F9D58] hover:bg-[#0c8047] text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 active:scale-98 transition-all cursor-pointer"
+        disabled={isCheckedIn}
+        className="w-full py-4 bg-[#0F9D58] hover:bg-[#0c8047] disabled:bg-gray-300 text-white font-extrabold text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer"
       >
         <CheckCircle className="w-5 h-5" />
-        <span>CHECK-IN (ARRIVÉE)</span>
+        <span>{isCheckedIn ? 'DÉJÀ CHECK-IN (EN POSTE)' : 'CHECK-IN (ARRIVÉE)'}</span>
       </button>
     </div>
   );
