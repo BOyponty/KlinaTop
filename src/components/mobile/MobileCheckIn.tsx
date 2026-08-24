@@ -25,12 +25,16 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
 }) => {
   const [currentTime, setCurrentTime] = useState('');
   const [currentDate, setCurrentDate] = useState('');
+  const [greeting, setGreeting] = useState<'Bonjour' | 'Bonsoir'>('Bonjour');
   const [address, setAddress] = useState('Avenue Jean Paul II, Cotonou, Bénin');
   const [isLocating, setIsLocating] = useState(false);
 
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
+      const currentHour = now.getHours();
+      // Au Bénin : Avant 12h = Bonjour, À partir de 12h (après-midi & soirée) = Bonsoir
+      setGreeting(currentHour >= 12 ? 'Bonsoir' : 'Bonjour');
       setCurrentTime(
         now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
       );
@@ -69,7 +73,7 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
       {/* Greeting Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 leading-tight">Bonjour, {firstName} 👋</h2>
+          <h2 className="text-xl font-bold text-gray-900 leading-tight">{greeting}, {firstName} 👋</h2>
           <p className="text-xs text-gray-500 capitalize">{currentDate}</p>
         </div>
         <button
@@ -99,93 +103,109 @@ export const MobileCheckIn: React.FC<MobileCheckInProps> = ({
         </div>
       )}
 
-      {/* Live Real-time Clock Card */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-xs flex flex-col items-center justify-center text-center relative overflow-hidden">
-        <div className="absolute top-0 inset-x-0 h-1 bg-[#0F9D58]"></div>
-        <div className="flex items-center gap-2 mb-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#0F9D58] animate-pulse"></span>
-          <span className="text-xs font-bold text-[#0F9D58] uppercase tracking-wider">
-            {isCheckedIn ? 'En Poste' : 'Hors Poste (Prêt au Check-in)'}
-          </span>
+      {/* Digital Clock Card */}
+      <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-xs text-center relative overflow-hidden">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold mb-2 bg-emerald-50 text-[#0F9D58]">
+          <span className="w-2 h-2 rounded-full bg-[#0F9D58] animate-ping" />
+          <span>{isCheckedIn ? 'EN POSTE (ACTIF)' : 'HORS POSTE (PRÊT AU CHECK-IN)'}</span>
         </div>
-        <div className="text-3xl font-extrabold text-gray-900 tracking-tight my-1">{currentTime}</div>
-        <p className="text-[11px] text-gray-400 font-medium">Équipe: {agent.equipeNom}</p>
+
+        <div className="text-4xl font-extrabold text-gray-900 tracking-tight font-mono my-1">
+          {currentTime || '08:00:00'}
+        </div>
+
+        <p className="text-xs text-gray-400 font-medium">Équipe: {agent.equipeNom || 'Équipe Alpha (Cotonou)'}</p>
       </div>
 
-      {/* Position Détectée Card */}
-      <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-xs space-y-2.5">
+      {/* GPS Location Card */}
+      <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-xs space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-gray-900 font-bold text-xs">
+          <div className="flex items-center gap-2 text-xs font-bold text-gray-700">
             <MapPin className="w-4 h-4 text-[#0F9D58]" />
             <span>Position détectée</span>
           </div>
           <button
             onClick={handleGetLocation}
-            title="Rafraîchir ma position GPS"
-            className="text-[11px] text-[#0F9D58] font-semibold flex items-center gap-1 hover:underline"
+            disabled={isLocating}
+            className="text-[11px] text-[#0F9D58] font-bold hover:underline flex items-center gap-1 cursor-pointer"
           >
-            <RefreshCw className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} /> GPS
+            <RefreshCw className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
+            <span>GPS</span>
           </button>
         </div>
 
-        {/* Mini Interactive Map Simulation */}
-        <div className="relative h-28 rounded-xl overflow-hidden border border-gray-200 bg-gray-100">
+        <div className="relative h-28 rounded-xl overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center">
           <img
-            src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?auto=format&fit=crop&q=80&w=600"
-            alt="Carte GPS"
-            className="w-full h-full object-cover opacity-85"
+            src="https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=600"
+            alt="Map Preview"
+            className="w-full h-full object-cover opacity-80"
           />
-          <div className="absolute inset-0 bg-black/10 flex items-center justify-center">
-            <div className="bg-[#0F9D58] text-white p-2 rounded-full shadow-lg ring-4 ring-emerald-400/40 animate-bounce">
-              <Navigation className="w-4 h-4 fill-white" />
+          <div className="absolute inset-0 bg-emerald-950/20" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-[#0F9D58] text-white flex items-center justify-center shadow-lg border-2 border-white animate-bounce">
+              <Navigation className="w-5 h-5" />
             </div>
           </div>
-          <div className="absolute bottom-1.5 left-2 bg-black/70 text-white text-[10px] px-2 py-0.5 rounded-md font-medium">
-            📍 Cotonou, Bénin
+          <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-xs text-white text-[10px] px-2 py-0.5 rounded-md flex items-center gap-1 font-medium">
+            <MapPin className="w-3 h-3 text-red-400" />
+            <span>Cotonou, Bénin</span>
           </div>
         </div>
 
-        <p className="text-xs text-gray-700 font-medium leading-snug">{address}</p>
+        <p className="text-xs text-gray-600 font-medium leading-relaxed">{address}</p>
       </div>
 
-      {/* Photo Capture Card */}
-      <div
-        onClick={onOpenCameraModal}
-        className="bg-white rounded-2xl p-4 border-2 border-dashed border-gray-200 hover:border-[#0F9D58] shadow-xs cursor-pointer transition-all flex items-center justify-between"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-[#0F9D58] flex items-center justify-center shrink-0">
-            <Camera className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="font-bold text-xs text-gray-900">Prendre une photo</h3>
-            <p className="text-[11px] text-gray-400">Obligatoire pour la validation de l'arrivée</p>
-          </div>
-        </div>
-
+      {/* Photo Capture Area */}
+      <div className="bg-white rounded-2xl p-4 border border-dashed border-emerald-300 shadow-xs space-y-3">
         {photoCaptured ? (
-          <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-[#0F9D58] shrink-0">
-            <img src={photoCaptured} alt="Vignette photo" className="w-full h-full object-cover" />
+          <div className="relative rounded-xl overflow-hidden border border-gray-200">
+            <img src={photoCaptured} alt="Selfie" className="w-full h-44 object-cover" />
+            <div className="absolute top-2 right-2 bg-emerald-600 text-white text-[10px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1 shadow-sm">
+              <CheckCircle className="w-3.5 h-3.5" />
+              Photo validée
+            </div>
+            <button
+              onClick={onOpenCameraModal}
+              className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-xl font-medium hover:bg-black/80 flex items-center gap-1.5 backdrop-blur-xs"
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Reprendre
+            </button>
           </div>
         ) : (
-          <div className="w-8 h-8 rounded-full bg-emerald-100 text-[#0F9D58] flex items-center justify-center font-bold text-lg">
-            +
+          <div
+            onClick={onOpenCameraModal}
+            className="p-4 rounded-xl bg-emerald-50/50 hover:bg-emerald-50 border border-emerald-100 flex items-center justify-between cursor-pointer transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-emerald-100 text-[#0F9D58] flex items-center justify-center">
+                <Camera className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-gray-800">Prendre une photo</p>
+                <p className="text-[10px] text-gray-400">Obligatoire pour la validation de l'arrivée</p>
+              </div>
+            </div>
+            <span className="w-8 h-8 rounded-full bg-emerald-100 text-[#0F9D58] flex items-center justify-center font-bold text-sm">
+              +
+            </span>
           </div>
         )}
       </div>
 
-      {/* Big Green CHECK-IN Button */}
+      {/* Main Check-In CTA Button */}
       <button
         onClick={() => {
-          const photoToUse =
-            photoCaptured || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&q=80&w=600';
-          onPerformCheckIn(photoToUse, address);
+          if (!photoCaptured) {
+            onOpenCameraModal();
+            return;
+          }
+          onPerformCheckIn(photoCaptured, address);
         }}
-        disabled={isCheckedIn}
-        className="w-full py-4 bg-[#0F9D58] hover:bg-[#0c8047] disabled:bg-gray-300 text-white font-extrabold text-base rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98"
+        className="w-full py-4 rounded-2xl bg-[#0F9D58] hover:bg-[#0c8047] text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20 active:scale-98 transition-all cursor-pointer"
       >
         <CheckCircle className="w-5 h-5" />
-        <span>{isCheckedIn ? 'DÉJÀ CHECK-IN (EN POSTE)' : 'CHECK-IN (ARRIVÉE)'}</span>
+        <span>CHECK-IN (ARRIVÉE)</span>
       </button>
     </div>
   );
