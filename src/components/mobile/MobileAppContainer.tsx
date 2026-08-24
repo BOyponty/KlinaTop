@@ -70,9 +70,21 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
       console.warn('Sync session error', e);
     }
   }, [allAgents, onSelectAgent]);
-
   const [activeTab, setActiveTab] = useState<MobileTab>('home');
   const [subView, setSubView] = useState<'checkin' | 'checkout'>('checkin');
+
+  const safeAgent: User = currentAgent || (allAgents && allAgents[0]) || {
+    id: 'emp-fallback',
+    nom: 'Agent Terrain',
+    email: 'agent@klinatop.bj',
+    telephone: '+229 97 00 00 00',
+    role: 'agent',
+    poste: "Agent d'entretien",
+    equipeId: 'eq-1',
+    equipeNom: 'Équipe A',
+    statut: 'Actif',
+    initiales: 'AT',
+  };
 
   if (!isLoggedIn) {
     return (
@@ -145,43 +157,52 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
             {/* Toggle Switch between Check-in & Check-out in Mobile view */}
             <div className="bg-white p-2 border-b border-gray-200 flex justify-center gap-2">
               <button
+                type="button"
                 onClick={() => setSubView('checkin')}
-                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   subView === 'checkin'
                     ? 'bg-[#0F9D58] text-white shadow-xs'
                     : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
                 }`}
               >
-                1. Arrivée (Check-in)
+                1. Check-In (Arrivée)
               </button>
               <button
+                type="button"
                 onClick={() => setSubView('checkout')}
-                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   subView === 'checkout'
-                    ? 'bg-amber-600 text-white shadow-xs'
+                    ? 'bg-rose-600 text-white shadow-xs'
                     : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
                 }`}
               >
-                2. Départ (Check-out)
+                2. Check-Out (Fin)
               </button>
             </div>
 
             {subView === 'checkin' ? (
               <MobileCheckIn
-                agent={currentAgent}
+                agent={safeAgent}
                 onPerformCheckIn={onPerformCheckIn}
                 onOpenCameraModal={onOpenCameraModal}
                 photoCaptured={photoCaptured}
+                onGoToCheckoutScreen={() => setSubView('checkout')}
                 isCheckedIn={isCheckedIn}
-                checkInTime={checkInTime}
+                onNavigateToProfile={() => setActiveTab('profile')}
+                onLogout={() => {
+                  try {
+                    localStorage.removeItem('klinatop_logged_agent_id');
+                  } catch (e) {}
+                  setIsLoggedIn(false);
+                }}
               />
             ) : (
               <MobileCheckOut
-                agent={currentAgent}
+                agent={safeAgent}
                 onPerformCheckOut={onPerformCheckOut}
                 onOpenCameraModal={onOpenCameraModal}
                 photoCaptured={photoCaptured}
-                isCheckedIn={isCheckedIn}
+                checkInTime={checkInTime}
               />
             )}
           </div>
@@ -189,7 +210,8 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
 
         {activeTab === 'history' && (
           <MobileHistory
-            agent={currentAgent}
+            agentId={safeAgent.id}
+            presences={presences}
             pointages={pointages}
             onInspectPhoto={onInspectPhoto}
           />
@@ -197,10 +219,10 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
 
         {activeTab === 'profile' && (
           <MobileProfile
-            agent={currentAgent}
+            agent={safeAgent}
             onUpdatePhoto={async (newPhotoUrl) => {
-              if (onUpdateAgentPhoto) {
-                await onUpdateAgentPhoto(currentAgent.id, newPhotoUrl);
+              if (onUpdateAgentPhoto && safeAgent.id) {
+                await onUpdateAgentPhoto(safeAgent.id, newPhotoUrl);
               }
             }}
             onLogout={() => {
@@ -213,22 +235,24 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
         )}
       </div>
 
-      {/* Bottom Floating Navigation Bar (Mobile Tab Bar) */}
-      <div className="absolute bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 px-6 py-2 flex justify-around items-center z-40">
+      {/* Bottom Mobile Tab Bar */}
+      <nav className="absolute bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 px-6 py-2.5 flex justify-around items-center z-30 shadow-lg">
         <button
+          type="button"
           onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center gap-1 transition-colors cursor-pointer ${
-            activeTab === 'home' ? 'text-[#0F9D58] font-bold' : 'text-gray-400 hover:text-gray-600'
+          className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+            activeTab === 'home' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
           <Home className="w-5 h-5" />
-          <span className="text-[10px]">Pointage</span>
+          <span className="text-[10px]">Accueil</span>
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('history')}
-          className={`flex flex-col items-center gap-1 transition-colors cursor-pointer ${
-            activeTab === 'history' ? 'text-[#0F9D58] font-bold' : 'text-gray-400 hover:text-gray-600'
+          className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+            activeTab === 'history' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
           <History className="w-5 h-5" />
@@ -236,15 +260,16 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
         </button>
 
         <button
+          type="button"
           onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center gap-1 transition-colors cursor-pointer ${
-            activeTab === 'profile' ? 'text-[#0F9D58] font-bold' : 'text-gray-400 hover:text-gray-600'
+          className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+            activeTab === 'profile' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
           <UserIcon className="w-5 h-5" />
-          <span className="text-[10px]">Mon Profil</span>
+          <span className="text-[10px]">Profil</span>
         </button>
-      </div>
+      </nav>
     </div>
   );
 };
