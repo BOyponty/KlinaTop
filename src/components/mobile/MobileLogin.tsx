@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, Phone, Mail, UserPlus, CheckCircle2, AlertCircle, KeyRound, ArrowLeft, Camera, Upload, RefreshCw, X } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, Phone, Mail, UserPlus, CheckCircle2, AlertCircle, KeyRound, ArrowLeft, Camera, Upload, RefreshCw, X, SwitchCamera } from 'lucide-react';
 import { User } from '../../types';
 import logoImg from '../../assets/images/klinatop_logo_1786547596570.jpg';
 
@@ -29,8 +29,10 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
   const [regEquipe, setRegEquipe] = useState('Équipe Alpha (Cotonou)');
   const [regPhoto, setRegPhoto] = useState<string | null>(null);
 
-  // Quick camera for registration
+  // Camera state & controls (front user vs back environment)
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const regFileInputRef = useRef<HTMLInputElement>(null);
@@ -45,43 +47,101 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
 
   const stopRegCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
       streamRef.current = null;
     }
     setIsCameraActive(false);
+    setCameraError(null);
   };
 
-  const startRegCamera = async () => {
+  const startRegCamera = async (facing: 'user' | 'environment' = cameraFacing) => {
     setErrorMsg('');
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 480 }, height: { ideal: 480 } },
-        audio: false,
+    setCameraError(null);
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
       });
+      streamRef.current = null;
+    }
+
+    try {
+      let s: MediaStream;
+      try {
+        s = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 640 },
+            height: { ideal: 640 },
+          },
+          audio: false,
+        });
+      } catch (err1) {
+        s = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
       streamRef.current = s;
       setIsCameraActive(true);
+      setCameraFacing(facing);
+
       if (videoRef.current) {
         videoRef.current.srcObject = s;
+        try {
+          await videoRef.current.play();
+        } catch (e) {
+          console.warn('Video auto-play issue:', e);
+        }
       }
-    } catch (err) {
-      console.warn('Registration camera issue:', err);
-      regFileInputRef.current?.click();
+    } catch (err: any) {
+      console.warn('Registration camera error:', err);
+      setCameraError("Impossible d'accéder à la caméra. Vous pouvez importer une photo depuis votre galerie.");
+      setIsCameraActive(false);
     }
   };
+
+  const toggleCameraFacing = async () => {
+    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+    setCameraFacing(nextFacing);
+    await startRegCamera(nextFacing);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopRegCamera();
+    };
+  }, []);
 
   const snapRegPhoto = () => {
     if (videoRef.current) {
       const video = videoRef.current;
-      const size = Math.min(video.videoWidth || 400, video.videoHeight || 400);
+      const vWidth = video.videoWidth || 400;
+      const vHeight = video.videoHeight || 400;
+      const size = Math.min(vWidth, vHeight);
+      
       const canvas = document.createElement('canvas');
-      canvas.width = 360;
-      canvas.height = 360;
+      canvas.width = 400;
+      canvas.height = 400;
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        const sx = ((video.videoWidth || 400) - size) / 2;
-        const sy = ((video.videoHeight || 400) - size) / 2;
-        ctx.drawImage(video, sx, sy, size, size, 0, 0, 360, 360);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        if (cameraFacing === 'user') {
+          ctx.translate(400, 0);
+          ctx.scale(-1, 1);
+        }
+        
+        const sx = (vWidth - size) / 2;
+        const sy = (vHeight - size) / 2;
+        ctx.drawImage(video, sx, sy, size, size, 0, 0, 400, 400);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
         setRegPhoto(dataUrl);
         stopRegCamera();
       }
@@ -99,14 +159,14 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const size = Math.min(img.width, img.height);
-        canvas.width = 360;
-        canvas.height = 360;
+        canvas.width = 400;
+        canvas.height = 400;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           const sx = (img.width - size) / 2;
           const sy = (img.height - size) / 2;
-          ctx.drawImage(img, sx, sy, size, size, 0, 0, 360, 360);
-          setRegPhoto(canvas.toDataURL('image/jpeg', 0.85));
+          ctx.drawImage(img, sx, sy, size, size, 0, 0, 400, 400);
+          setRegPhoto(canvas.toDataURL('image/jpeg', 0.88));
         }
       };
       img.src = raw;
@@ -114,7 +174,6 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     reader.readAsDataURL(file);
   };
 
-  // 1. Authentification stricte de l'agent
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -136,7 +195,6 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       return;
     }
 
-    // Recherche de l'agent dans la base
     const matchedAgent = availableAgents.find((a) => {
       const matchPhone = (a.telephone || '').replace(/\s+/g, '').includes(cleanInput.replace(/\s+/g, ''));
       const matchEmail = (a.email || '').toLowerCase() === cleanInput;
@@ -163,7 +221,6 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     }, 500);
   };
 
-  // 2. Inscription d'un nouvel agent avec photo
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -227,7 +284,6 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     }, 500);
   };
 
-  // 3. Récupération mot de passe
   const handleForgotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -326,7 +382,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
         </div>
       )}
 
-      {/* 3. MODE 1: LOGIN FORM (Exact match to original screenshot) */}
+      {/* 3. MODE 1: LOGIN FORM */}
       {mode === 'login' && (
         <form onSubmit={handleLoginSubmit} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-4 my-auto">
           <div className="space-y-1.5">
@@ -416,7 +472,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
         </form>
       )}
 
-      {/* 4. MODE 2: REGISTER FORM (with photo selector) */}
+      {/* 4. MODE 2: REGISTER FORM WITH DUAL CAMERA (Front / Back) & Upload */}
       {mode === 'register' && (
         <form onSubmit={handleRegisterSubmit} className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 space-y-3.5 my-auto max-h-[70vh] overflow-y-auto">
           <div className="text-center pb-1">
@@ -424,7 +480,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
             <p className="text-[10px] text-gray-500">Ajoutez votre vraie photo de profil pour la transparence</p>
           </div>
 
-          {/* Photo Avatar with Camera/Upload Buttons */}
+          {/* Photo Avatar with Dual Camera (Front / Rear) and Upload */}
           <div className="flex flex-col items-center justify-center p-3 bg-gray-50/80 rounded-2xl border border-gray-100 space-y-2">
             <div className="relative">
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#0F9D58] bg-white shadow-xs flex items-center justify-center">
@@ -439,47 +495,83 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
                   type="button"
                   onClick={() => setRegPhoto(null)}
                   className="absolute -top-1 -right-1 p-1 bg-rose-500 text-white rounded-full shadow-xs hover:bg-rose-600 cursor-pointer"
+                  title="Supprimer la photo"
                 >
                   <X className="w-3 h-3" />
                 </button>
               )}
             </div>
 
+            {/* Error notice if camera is blocked */}
+            {cameraError && (
+              <p className="text-[10px] text-amber-600 text-center px-2">{cameraError}</p>
+            )}
+
             {isCameraActive ? (
-              <div className="flex flex-col items-center space-y-1.5 w-full">
-                <div className="w-36 h-36 rounded-2xl overflow-hidden border-2 border-[#0F9D58] bg-black">
-                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+              <div className="flex flex-col items-center space-y-2 w-full">
+                <div className="relative w-44 h-44 rounded-2xl overflow-hidden border-2 border-[#0F9D58] bg-black shadow-inner">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
+                  />
+                  {/* Badge Mode Caméra */}
+                  <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    {cameraFacing === 'user' ? 'Caméra Avant (Selfie)' : 'Caméra Arrière'}
+                  </div>
+
+                  {/* Switch Front / Back Camera Button */}
+                  <button
+                    type="button"
+                    onClick={toggleCameraFacing}
+                    className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full shadow-xs transition-all cursor-pointer"
+                    title="Basculer vers l'autre caméra (Devant / Derrière)"
+                  >
+                    <SwitchCamera className="w-4 h-4 text-emerald-300" />
+                  </button>
                 </div>
+
                 <div className="flex gap-2 w-full">
                   <button
                     type="button"
                     onClick={snapRegPhoto}
-                    className="flex-1 py-1.5 bg-[#0F9D58] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+                    className="flex-1 py-2 bg-[#0F9D58] hover:bg-[#0c8047] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-98"
                   >
-                    <Camera className="w-3.5 h-3.5" /> Capturer
+                    <Camera className="w-3.5 h-3.5" /> Prendre la photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleCameraFacing}
+                    className="px-3 py-2 bg-emerald-50 text-[#0F9D58] border border-emerald-200 rounded-xl text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                    title="Changer de caméra"
+                  >
+                    <SwitchCamera className="w-3.5 h-3.5" /> {cameraFacing === 'user' ? 'Arrière' : 'Avant'}
                   </button>
                   <button
                     type="button"
                     onClick={stopRegCamera}
-                    className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold cursor-pointer"
+                    className="px-3 py-2 bg-gray-200 text-gray-700 rounded-xl text-xs font-semibold cursor-pointer hover:bg-gray-300"
                   >
                     Annuler
                   </button>
                 </div>
               </div>
             ) : (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={startRegCamera}
-                  className="px-3 py-1.5 bg-white border border-gray-200 hover:border-[#0F9D58] text-[#0F9D58] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  onClick={() => startRegCamera('user')}
+                  className="px-3 py-1.5 bg-white border border-gray-200 hover:border-[#0F9D58] text-[#0F9D58] rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 transition-all"
                 >
                   <Camera className="w-3.5 h-3.5" /> Prendre Photo
                 </button>
                 <button
                   type="button"
                   onClick={() => regFileInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  className="px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 text-gray-700 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 transition-all"
                 >
                   <Upload className="w-3.5 h-3.5 text-gray-400" /> Importer
                 </button>
