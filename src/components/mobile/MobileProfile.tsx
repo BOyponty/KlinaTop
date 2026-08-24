@@ -12,7 +12,10 @@ import {
   RefreshCw,
   Check,
   X,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  Image as ImageIcon,
+  SwitchCamera
 } from 'lucide-react';
 import { User } from '../../types';
 
@@ -26,17 +29,32 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [photoSourceMode, setPhotoSourceMode] = useState<'camera' | 'upload' | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [cameraFacing, setCameraFacing] = useState<'user' | 'environment'>('user');
   const [tempPhoto, setTempPhoto] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Arrêt propre du flux vidéo caméra
   const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
+      streamRef.current = null;
+    }
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (e) {}
+      });
       setStream(null);
     }
   };
@@ -47,24 +65,42 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
     };
   }, []);
 
-  const openCamera = async () => {
+  const openCamera = async (facing: 'user' | 'environment' = cameraFacing) => {
     setCameraError(null);
     setTempPhoto(null);
     setPhotoSourceMode('camera');
     setIsPhotoModalOpen(true);
 
+    stopCameraStream();
+
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 640 },
-          height: { ideal: 640 },
-        },
-        audio: false,
-      });
+      let mediaStream: MediaStream;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: facing },
+            width: { ideal: 640 },
+            height: { ideal: 640 },
+          },
+          audio: false,
+        });
+      } catch (err1) {
+        // Secours si contrainte stricte non supportée
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      streamRef.current = mediaStream;
       setStream(mediaStream);
+      setCameraFacing(facing);
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
+        try {
+          await videoRef.current.play();
+        } catch (e) {}
       }
     } catch (err) {
       console.warn('Camera access issue:', err);
@@ -72,18 +108,33 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
     }
   };
 
+  const toggleCameraFacing = async () => {
+    const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
+    setCameraFacing(nextFacing);
+    await openCamera(nextFacing);
+  };
+
   const captureCameraSnapshot = () => {
     if (videoRef.current) {
       const video = videoRef.current;
-      const size = Math.min(video.videoWidth || 480, video.videoHeight || 480);
+      const vWidth = video.videoWidth || 480;
+      const vHeight = video.videoHeight || 480;
+      const size = Math.min(vWidth, vHeight);
       const canvas = document.createElement('canvas');
       canvas.width = 400;
       canvas.height = 400;
       const ctx = canvas.getContext('2d');
 
       if (ctx) {
-        const startX = ((video.videoWidth || 480) - size) / 2;
-        const startY = ((video.videoHeight || 480) - size) / 2;
+        // Effet miroir uniquement sur caméra avant (Selfie)
+        if (cameraFacing === 'user') {
+          ctx.translate(400, 0);
+          ctx.scale(-1, 1);
+        }
+
+        // Recadrage carré centré
+        const startX = (vWidth - size) / 2;
+        const startY = (vHeight - size) / 2;
         ctx.drawImage(video, startX, startY, size, size, 0, 0, 400, 400);
 
         const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
@@ -162,9 +213,10 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
 
       {/* Profile Header Box */}
       <div className="bg-white rounded-3xl p-5 border border-gray-200 shadow-sm flex flex-col items-center text-center space-y-3 relative overflow-hidden">
+        {/* Top Accent */}
         <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#0F9D58] via-emerald-400 to-[#0F9D58]" />
 
-        {/* Real Profile Photo with Camera Trigger Button */}
+        {/* Photo de profil de l'agent */}
         <div className="relative group mt-1">
           <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-[#0F9D58] shadow-md bg-gray-100 flex items-center justify-center">
             {agent.photoUrl ? (
@@ -180,9 +232,10 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
             )}
           </div>
 
+          {/* Bouton rapide caméra sur l'avatar */}
           <button
             type="button"
-            onClick={openCamera}
+            onClick={() => openCamera('user')}
             title="Prendre une photo réelle"
             className="absolute bottom-0 right-0 p-2 bg-[#0F9D58] hover:bg-[#0c8047] text-white rounded-full shadow-lg border-2 border-white transition-transform active:scale-90 cursor-pointer"
           >
@@ -195,17 +248,18 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
           <p className="text-xs font-bold text-[#0F9D58] mt-0.5">{agent.poste}</p>
         </div>
 
+        {/* Badges */}
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-[#0F9D58] px-3 py-1 rounded-full text-[11px] font-bold">
             <ShieldCheck className="w-3.5 h-3.5" /> Identité Vérifiée
           </span>
         </div>
 
-        {/* Action Buttons: Camera vs File Upload */}
+        {/* Boutons d'action */}
         <div className="w-full pt-2 flex gap-2">
           <button
             type="button"
-            onClick={openCamera}
+            onClick={() => openCamera('user')}
             className="flex-1 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-[#0F9D58] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all active:scale-98 cursor-pointer"
           >
             <Camera className="w-4 h-4" />
@@ -221,6 +275,7 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
             <span>Importer Photo</span>
           </button>
 
+          {/* Native File Input caché */}
           <input
             ref={fileInputRef}
             type="file"
@@ -231,7 +286,7 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
         </div>
       </div>
 
-      {/* Information Cards */}
+      {/* Informations de l'agent */}
       <div className="bg-white rounded-2xl p-4 border border-gray-200 shadow-xs space-y-3.5 text-xs">
         <div className="text-[11px] font-bold uppercase text-gray-400 tracking-wider">
           Informations de l'agent
@@ -276,10 +331,11 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
         <LogOut className="w-4 h-4" /> Se déconnecter de ce téléphone
       </button>
 
-      {/* MODAL: Camera Capture & Photo Confirmation */}
+      {/* MODAL: Capture Caméra (Avant / Arrière) & Validation */}
       {isPhotoModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 animate-fadeIn">
           <div className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col">
+            {/* Modal Header */}
             <div className="px-5 py-3.5 bg-gray-900 text-white flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Camera className="w-4 h-4 text-[#0F9D58]" />
@@ -288,14 +344,16 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
               <button
                 type="button"
                 onClick={handleCloseModal}
-                className="p-1 rounded-full text-gray-400 hover:text-white"
+                className="p-1 rounded-full text-gray-400 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
+            {/* Modal Content */}
             <div className="p-4 flex flex-col items-center space-y-3">
               {tempPhoto ? (
+                /* Aperçu Photo capturée */
                 <div className="flex flex-col items-center space-y-3 w-full">
                   <div className="w-48 h-48 rounded-2xl overflow-hidden border-4 border-[#0F9D58] shadow-md bg-black">
                     <img
@@ -314,7 +372,7 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
                       onClick={() => {
                         setTempPhoto(null);
                         if (photoSourceMode === 'camera') {
-                          openCamera();
+                          openCamera(cameraFacing);
                         } else {
                           fileInputRef.current?.click();
                         }
@@ -343,6 +401,7 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
                   </div>
                 </div>
               ) : (
+                /* Vue Caméra en Direct (Avant ou Arrière) */
                 <div className="flex flex-col items-center space-y-3 w-full">
                   {cameraError ? (
                     <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-center space-y-2.5 w-full">
@@ -363,21 +422,49 @@ export const MobileProfile: React.FC<MobileProfileProps> = ({ agent, onLogout, o
                         autoPlay
                         playsInline
                         muted
-                        className="w-full h-full object-cover scale-x-[-1]"
+                        className={`w-full h-full object-cover ${cameraFacing === 'user' ? 'scale-x-[-1]' : ''}`}
                       />
+                      {/* Guide circulaire */}
                       <div className="absolute inset-0 border-2 border-dashed border-white/60 rounded-full pointer-events-none" />
+
+                      {/* Badge Mode Caméra */}
+                      <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        {cameraFacing === 'user' ? 'Caméra Avant' : 'Caméra Arrière'}
+                      </div>
+
+                      {/* Bouton de basculement Caméra sur la vidéo */}
+                      <button
+                        type="button"
+                        onClick={toggleCameraFacing}
+                        className="absolute bottom-3 right-3 p-2 bg-black/70 hover:bg-black/90 text-white rounded-full shadow-lg transition-all cursor-pointer z-10"
+                        title="Basculer de caméra (Avant / Arrière)"
+                      >
+                        <SwitchCamera className="w-4 h-4 text-emerald-300" />
+                      </button>
                     </div>
                   )}
 
                   {!cameraError && (
-                    <button
-                      type="button"
-                      onClick={captureCameraSnapshot}
-                      className="w-full py-3 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-xs rounded-2xl shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-                    >
-                      <Camera className="w-4 h-4" />
-                      <span>Prendre la photo maintenant</span>
-                    </button>
+                    <div className="flex gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={captureCameraSnapshot}
+                        className="flex-1 py-3 bg-[#0F9D58] hover:bg-[#0c8047] text-white font-bold text-xs rounded-2xl shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                      >
+                        <Camera className="w-4 h-4" />
+                        <span>Prendre la photo</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={toggleCameraFacing}
+                        className="px-3.5 py-3 bg-emerald-50 hover:bg-emerald-100 text-[#0F9D58] border border-emerald-200 rounded-2xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                        title="Changer de caméra"
+                      >
+                        <SwitchCamera className="w-4 h-4" />
+                        <span>{cameraFacing === 'user' ? 'Arrière' : 'Avant'}</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
