@@ -5,89 +5,107 @@ import {
   getDocs,
   onSnapshot,
   query,
-  orderBy,
-  limit,
-  addDoc,
-  serverTimestamp,
-  updateDoc
+  updateDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, Equipe, Pointage, Presence, PayrollExportHistory, RhAdminUser } from '../types';
-import { initialUsers, initialEquipes, initialPointages, initialPresences, initialExportHistory } from '../data/mockData';
+import { User, Equipe, Presence, Pointage, RhAdminUser } from '../types';
+import {
+  initialUsers,
+  initialEquipes,
+  initialPresences,
+  initialPointages,
+} from '../data/mockData';
 
-const USERS_COLLECTION = 'users';
-const EQUIPES_COLLECTION = 'equipes';
-const POINTAGES_COLLECTION = 'pointages';
-const PRESENCES_COLLECTION = 'presences';
-const EXPORTS_COLLECTION = 'exports';
-const ADMINS_COLLECTION = 'admins';
+// Firestore collection names
+export const USERS_COLLECTION = 'users';
+export const EQUIPES_COLLECTION = 'equipes';
+export const PRESENCES_COLLECTION = 'presences';
+export const POINTAGES_COLLECTION = 'pointages';
+export const ADMINS_COLLECTION = 'admins';
 
-// Initial default admins if none exist
+// Predefined RH Admins
 export const initialAdmins: RhAdminUser[] = [
   {
-    id: 'adm-1',
-    nom: 'ZINSOU Chantal',
-    email: 'chantal.zinsou@klinatop.bj',
-    telephone: '+229 97 45 12 00',
-    role: 'rh',
-    poste: 'Responsable RH Principale',
-    photoUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200',
-    initiales: 'CZ',
+    id: 'adm-001',
+    nom: 'KOFFI Léon',
+    email: 'admin@klinatop.bj',
+    poste: 'Directeur Général & Fondateur',
+    role: 'superadmin',
+    initiales: 'LK',
     motDePasse: 'admin123',
+    telephone: '+229 97 00 11 22',
   },
   {
-    id: 'adm-2',
-    nom: 'KOFFI Fadou Léon',
-    email: 'leonkoffifadou2000@gmail.com',
-    telephone: '+229 95 00 11 22',
-    role: 'superadmin',
-    poste: 'Directeur Général & Administrateur',
-    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-    initiales: 'KF',
-    motDePasse: 'admin123',
-  }
+    id: 'adm-002',
+    nom: 'ZINSOU Chantal',
+    email: 'rh@klinatop.bj',
+    poste: 'Responsable RH & Paie',
+    role: 'admin',
+    initiales: 'CZ',
+    motDePasse: 'rh123',
+    telephone: '+229 95 33 44 55',
+  },
 ];
 
-// Helper to seed initial data if collections are empty
+// Helper to strip undefined values so Firestore setDoc/updateDoc never fails
+export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        result[key] = sanitizeForFirestore(value);
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+  return result;
+}
+
+// 0. Initial Seeding when database is empty
 export async function initializeDatabaseIfEmpty() {
   try {
-    const usersSnap = await getDocs(collection(db, USERS_COLLECTION));
-    if (usersSnap.empty) {
-      console.log('Seeding initial Firebase data...');
-      
-      // Seed Equipes
-      for (const eq of initialEquipes) {
-        await setDoc(doc(db, EQUIPES_COLLECTION, eq.id), sanitizeForFirestore(eq));
-      }
-
-      // Seed Users
+    const usersSnapshot = await getDocs(collection(db, USERS_COLLECTION));
+    if (usersSnapshot.empty) {
+      console.log('Seeding initial users to Firestore...');
       for (const u of initialUsers) {
         await setDoc(doc(db, USERS_COLLECTION, u.id), sanitizeForFirestore(u));
       }
+    }
 
-      // Seed Pointages
-      for (const ptg of initialPointages) {
-        await setDoc(doc(db, POINTAGES_COLLECTION, ptg.id), sanitizeForFirestore(ptg));
+    const equipesSnapshot = await getDocs(collection(db, EQUIPES_COLLECTION));
+    if (equipesSnapshot.empty) {
+      console.log('Seeding initial equipes to Firestore...');
+      for (const eq of initialEquipes) {
+        await setDoc(doc(db, EQUIPES_COLLECTION, eq.id), sanitizeForFirestore(eq));
       }
+    }
 
-      // Seed Presences
+    const presencesSnapshot = await getDocs(collection(db, PRESENCES_COLLECTION));
+    if (presencesSnapshot.empty) {
+      console.log('Seeding initial presences to Firestore...');
       for (const prs of initialPresences) {
         await setDoc(doc(db, PRESENCES_COLLECTION, prs.id), sanitizeForFirestore(prs));
       }
+    }
 
-      // Seed Exports
-      for (const exp of initialExportHistory) {
-        await setDoc(doc(db, EXPORTS_COLLECTION, exp.id), sanitizeForFirestore(exp));
+    const pointagesSnapshot = await getDocs(collection(db, POINTAGES_COLLECTION));
+    if (pointagesSnapshot.empty) {
+      console.log('Seeding initial pointages to Firestore...');
+      for (const ptg of initialPointages) {
+        await setDoc(doc(db, POINTAGES_COLLECTION, ptg.id), sanitizeForFirestore(ptg));
       }
     }
 
-    // Always ensure default admins exist with their passwords in Firestore
-    for (const adm of initialAdmins) {
-      await setDoc(doc(db, ADMINS_COLLECTION, adm.id), sanitizeForFirestore(adm), { merge: true });
+    const adminsSnapshot = await getDocs(collection(db, ADMINS_COLLECTION));
+    if (adminsSnapshot.empty) {
+      console.log('Seeding initial admins to Firestore...');
+      for (const adm of initialAdmins) {
+        await setDoc(doc(db, ADMINS_COLLECTION, adm.id), sanitizeForFirestore(adm));
+      }
     }
-    console.log('Firebase seeding & admin sync complete!');
   } catch (error) {
-    console.error('Error seeding Firebase database:', error);
+    console.error('Error in initializeDatabaseIfEmpty:', error);
   }
 }
 
@@ -95,13 +113,11 @@ export async function initializeDatabaseIfEmpty() {
 export function subscribeToUsers(callback: (users: User[]) => void) {
   const q = query(collection(db, USERS_COLLECTION));
   return onSnapshot(q, (snapshot) => {
-    if (!snapshot.empty) {
-      const usersList: User[] = [];
-      snapshot.forEach((doc) => {
-        usersList.push({ id: doc.id, ...doc.data() } as User);
-      });
-      callback(usersList);
-    }
+    const userList: User[] = [];
+    snapshot.forEach((doc) => {
+      userList.push({ id: doc.id, ...doc.data() } as User);
+    });
+    callback(userList);
   }, (err) => {
     console.error('Firestore Users listener error:', err);
   });
@@ -109,7 +125,7 @@ export function subscribeToUsers(callback: (users: User[]) => void) {
 
 // 2. Pointages real-time listener
 export function subscribeToPointages(callback: (pointages: Pointage[]) => void) {
-  const q = query(collection(db, POINTAGES_COLLECTION), orderBy('timestamp', 'desc'), limit(100));
+  const q = query(collection(db, POINTAGES_COLLECTION));
   return onSnapshot(q, (snapshot) => {
     const ptgList: Pointage[] = [];
     snapshot.forEach((doc) => {
@@ -147,21 +163,6 @@ export function subscribeToEquipes(callback: (equipes: Equipe[]) => void) {
   }, (err) => {
     console.error('Firestore Equipes listener error:', err);
   });
-}
-
-// Helper to strip undefined values so Firestore setDoc/updateDoc never fails
-export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-        result[key] = sanitizeForFirestore(value);
-      } else {
-        result[key] = value;
-      }
-    }
-  }
-  return result;
 }
 
 // 5. Add new Pointage to Firestore & update Presences
@@ -207,13 +208,13 @@ export async function registerUserInFirestore(user: User) {
   }
 }
 
-// Update an existing Admin in Firestore (e.g. photoUrl, nom, telephone, email)
-export async function updateAdminInFirestore(adminId: string, updates: Partial<RhAdminUser>) {
+// 6b. Update user details or photo in Firestore
+export async function updateUserInFirestore(userId: string, updates: Partial<User>) {
   try {
-    const adminRef = doc(db, ADMINS_COLLECTION, adminId);
-    await setDoc(adminRef, sanitizeForFirestore(updates), { merge: true });
+    const userRef = doc(db, USERS_COLLECTION, userId);
+    await setDoc(userRef, sanitizeForFirestore(updates), { merge: true });
   } catch (error) {
-    console.error('Error updating admin in Firestore:', error);
+    console.error('Error updating user in Firestore:', error);
     throw error;
   }
 }
@@ -247,6 +248,17 @@ export async function registerAdminInFirestore(admin: RhAdminUser) {
   }
 }
 
+// 8b. Update an existing Admin in Firestore (e.g. photoUrl, nom, telephone, email)
+export async function updateAdminInFirestore(adminId: string, updates: Partial<RhAdminUser>) {
+  try {
+    const adminRef = doc(db, ADMINS_COLLECTION, adminId);
+    await setDoc(adminRef, sanitizeForFirestore(updates), { merge: true });
+  } catch (error) {
+    console.error('Error updating admin in Firestore:', error);
+    throw error;
+  }
+}
+
 // 9. Authenticate Admin with email and password strictly
 export async function authenticateAdminInFirestore(
   email: string,
@@ -256,7 +268,6 @@ export async function authenticateAdminInFirestore(
   const cleanPass = enteredPassword.trim();
 
   try {
-    // Query Firestore admins collection
     const adminsSnap = await getDocs(collection(db, ADMINS_COLLECTION));
     let matchedAdmin: RhAdminUser | null = null;
 
@@ -269,27 +280,23 @@ export async function authenticateAdminInFirestore(
       });
     }
 
-    // If not yet in Firestore, check initial default admins list
     if (!matchedAdmin) {
       const defaultMatch = initialAdmins.find((a) => (a.email || '').toLowerCase() === cleanEmail);
       if (defaultMatch) {
         matchedAdmin = defaultMatch;
         try {
           await setDoc(doc(db, ADMINS_COLLECTION, defaultMatch.id), defaultMatch, { merge: true });
-        } catch {
-          // ignore setDoc error
-        }
+        } catch {}
       }
     }
 
     if (!matchedAdmin) {
       return {
         success: false,
-        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
+        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email."
       };
     }
 
-    // Strict password verification
     const expectedPassword = (matchedAdmin as RhAdminUser).motDePasse || 'admin123';
     if (cleanPass !== expectedPassword) {
       return {
@@ -304,18 +311,11 @@ export async function authenticateAdminInFirestore(
     };
   } catch (error) {
     console.error('Authentication check error:', error);
-    // Fallback: check against initial admins
     const defaultMatch = initialAdmins.find((a) => (a.email || '').toLowerCase() === cleanEmail);
-    if (!defaultMatch) {
+    if (!defaultMatch || cleanPass !== (defaultMatch.motDePasse || 'admin123')) {
       return {
         success: false,
-        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
-      };
-    }
-    if (cleanPass !== (defaultMatch.motDePasse || 'admin123')) {
-      return {
-        success: false,
-        error: "Mot de passe incorrect. Veuillez vérifier votre mot de passe administrateur."
+        error: "Identifiants invalides."
       };
     }
     return {
