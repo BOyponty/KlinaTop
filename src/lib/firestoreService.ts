@@ -207,13 +207,13 @@ export async function registerUserInFirestore(user: User) {
   }
 }
 
-// 6b. Update user details or photo in Firestore
-export async function updateUserInFirestore(userId: string, updates: Partial<User>) {
+// Update an existing Admin in Firestore (e.g. photoUrl, nom, telephone, email)
+export async function updateAdminInFirestore(adminId: string, updates: Partial<RhAdminUser>) {
   try {
-    const userRef = doc(db, USERS_COLLECTION, userId);
-    await updateDoc(userRef, sanitizeForFirestore(updates));
+    const adminRef = doc(db, ADMINS_COLLECTION, adminId);
+    await setDoc(adminRef, sanitizeForFirestore(updates), { merge: true });
   } catch (error) {
-    console.error('Error updating user in Firestore:', error);
+    console.error('Error updating admin in Firestore:', error);
     throw error;
   }
 }

@@ -1,36 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Smartphone, LayoutDashboard, Search, Bell, Mail, RefreshCw, UserCheck, LogOut, ShieldCheck, ChevronDown, User as UserIcon } from 'lucide-react';
+import { Smartphone, LayoutDashboard, Search, Bell, Mail, RefreshCw, UserCheck, LogOut, ShieldCheck, ChevronDown, User as UserIcon, Camera } from 'lucide-react';
 import { User, RhAdminUser } from '../types';
 
 interface NavbarProps {
-  currentMode: 'web' | 'mobile';
-  onModeChange: (mode: 'web' | 'mobile') => void;
-  currentUser: User;
-  allAgents: User[];
+  currentView: 'web' | 'mobile';
+  onToggleView: (view: 'web' | 'mobile') => void;
+  agents: User[];
+  selectedAgent: User;
   onSelectAgent: (agent: User) => void;
   onResetData: () => void;
   onLogoutRH?: () => void;
+  onOpenRhProfileModal?: () => void;
   isRhAuthenticated?: boolean;
   currentAdmin?: RhAdminUser | null;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  currentMode,
-  onModeChange,
-  currentUser,
-  allAgents,
+  currentView,
+  onToggleView,
+  agents,
+  selectedAgent,
   onSelectAgent,
   onResetData,
   onLogoutRH,
+  onOpenRhProfileModal,
   isRhAuthenticated = true,
   currentAdmin,
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
         setShowProfileMenu(false);
       }
     };
@@ -41,141 +43,171 @@ export const Navbar: React.FC<NavbarProps> = ({
   const adminName = currentAdmin?.nom || 'Responsable RH';
   const adminPoste = currentAdmin?.poste || 'Administration KlinaTop';
   const adminEmail = currentAdmin?.email || 'admin@klinatop.bj';
-  const adminPhoto = currentAdmin?.photoUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200';
+  const adminPhoto = currentAdmin?.photoUrl;
+  const adminInitials = currentAdmin?.initiales || (
+    adminName.trim()
+      ? adminName.trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+      : 'RH'
+  );
 
   return (
     <header className="sticky top-0 z-40 bg-[#1F2937] text-white border-b border-gray-700/80 shadow-sm px-4 lg:px-6 py-2.5">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 max-w-7xl mx-auto">
-        {/* Barre de recherche - Visible uniquement si l'admin est connecté */}
-        {isRhAuthenticated && currentMode === 'web' ? (
-          <div className="relative w-full sm:w-72 md:w-80">
+      <div className="flex items-center justify-between gap-4">
+        {/* Left: Search Bar with Clean UI */}
+        <div className="flex-1 max-w-md hidden md:block">
+          <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Rechercher agent, site, pointage..."
-              className="w-full bg-gray-900/90 border border-gray-700/80 rounded-full pl-10 pr-4 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-[#0F9D58] transition-all"
+              placeholder="Rechercher agent, équipe, site, matricule..."
+              className="w-full bg-gray-800/80 border border-gray-700 text-xs text-white pl-10 pr-4 py-2 rounded-xl focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] placeholder-gray-400 transition-all"
             />
           </div>
-        ) : (
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-400">
-            <ShieldCheck className="w-4 h-4 text-[#0F9D58]" />
-            <span>Portail d'entreprise KlinaTop</span>
-          </div>
-        )}
+        </div>
 
-        {/* Boutons de bascule Dashboard RH / App Agent */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-gray-900/80 p-1 rounded-xl border border-gray-700/80">
+        {/* Right Section: View Switcher, Notifications, Quick Agent Selector, and Admin Profile */}
+        <div className="flex items-center gap-3 ml-auto">
+          {/* Platform View Switcher (Desktop Web Dashboard vs Mobile Agent View) */}
+          <div className="flex items-center bg-gray-800/90 p-1 rounded-xl border border-gray-700">
             <button
-              onClick={() => onModeChange('web')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                currentMode === 'web'
+              onClick={() => onToggleView('web')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                currentView === 'web'
                   ? 'bg-[#0F9D58] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Dashboard RH</span>
+              <span className="hidden sm:inline">Espace RH (Web)</span>
             </button>
-
             <button
-              onClick={() => onModeChange('mobile')}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
-                currentMode === 'mobile'
+              onClick={() => onToggleView('mobile')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                currentView === 'mobile'
                   ? 'bg-[#0F9D58] text-white shadow-sm'
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                  : 'text-gray-300 hover:text-white hover:bg-gray-700/50'
               }`}
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span>App Agent</span>
+              <span className="hidden sm:inline">App Agent (Mobile)</span>
             </button>
           </div>
 
-          {/* Sélecteur d'agent pour la simulation - Uniquement en mode mobile */}
-          {currentMode === 'mobile' && (
-            <div className="hidden xl:flex items-center gap-1.5 bg-gray-800/80 px-2.5 py-1 rounded-xl border border-gray-700 text-xs">
+          {/* Quick Agent Dropdown for testing different agent roles */}
+          {currentView === 'mobile' && (
+            <div className="relative hidden sm:flex items-center gap-2 bg-gray-800/80 px-2.5 py-1.5 rounded-xl border border-gray-700 text-xs text-gray-200">
               <UserCheck className="w-3.5 h-3.5 text-[#0F9D58]" />
+              <span className="text-gray-400">Agent actif:</span>
               <select
-                value={currentUser.id}
+                value={selectedAgent.id}
                 onChange={(e) => {
-                  const found = allAgents.find((a) => a.id === e.target.value);
+                  const found = agents.find((a) => a.id === e.target.value);
                   if (found) onSelectAgent(found);
                 }}
-                className="bg-transparent text-white text-xs font-medium outline-none cursor-pointer"
+                className="bg-transparent text-white font-medium focus:outline-none cursor-pointer text-xs"
               >
-                {allAgents.map((ag) => (
-                  <option key={ag.id} value={ag.id} className="bg-gray-900 text-white">
-                    {ag.nom}
+                {agents.map((agent) => (
+                  <option key={agent.id} value={agent.id} className="bg-gray-800 text-white">
+                    {agent.nom} ({agent.poste})
                   </option>
                 ))}
               </select>
             </div>
           )}
 
-          <button
-            onClick={onResetData}
-            title="Rafraîchir les données"
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-xs cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Profil Administrateur & Notifications - Visible UNIQUEMENT si l'admin est connecté */}
-        {isRhAuthenticated && currentAdmin && currentMode === 'web' ? (
-          <div className="flex items-center gap-3">
-            {/* Cloche de Notifications */}
+          {/* Notification & Messages Icons */}
+          <div className="flex items-center gap-1">
             <button
               title="Notifications"
-              className="relative text-gray-300 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-800"
+              className="p-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-xl transition-colors relative"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-[#1F2937]"></span>
+              <span className="w-2 h-2 rounded-full bg-[#0F9D58] absolute top-1.5 right-1.5 ring-2 ring-[#1F2937]" />
             </button>
 
-            {/* Icône Messages */}
-            <button title="Messages" className="text-gray-300 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-800">
+            <button
+              title="Messages internes"
+              className="p-2 text-gray-300 hover:text-white hover:bg-gray-800 rounded-xl transition-colors hidden sm:block"
+            >
               <Mail className="w-4 h-4" />
             </button>
 
-            {/* Menu Déroulant du Profil Administrateur */}
-            <div className="relative" ref={menuRef}>
+            <button
+              onClick={onResetData}
+              title="Réinitialiser les données de démo"
+              className="p-2 text-gray-300 hover:text-amber-400 hover:bg-gray-800 rounded-xl transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="h-6 w-px bg-gray-700 mx-1 hidden sm:block" />
+
+          {/* Connected HR Admin Profile & Menu */}
+          {isRhAuthenticated && (
+            <div className="relative" ref={profileMenuRef}>
               <button
                 onClick={() => setShowProfileMenu(!showProfileMenu)}
                 title="Mon profil Administrateur"
                 className="flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-full bg-gray-800/80 hover:bg-gray-800 border border-gray-700/80 hover:border-[#0F9D58] transition-all cursor-pointer"
               >
-                <div className="w-7 h-7 rounded-full overflow-hidden border border-[#0F9D58] shadow-sm bg-gray-900 shrink-0">
-                  <img
-                    src={adminPhoto}
-                    alt={adminName}
-                    className="w-full h-full object-cover"
-                  />
+                <div className="w-7 h-7 rounded-full overflow-hidden border border-[#0F9D58] shadow-sm bg-gray-900 shrink-0 flex items-center justify-center">
+                  {adminPhoto ? (
+                    <img
+                      src={adminPhoto}
+                      alt={adminName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#0F9D58] text-white flex items-center justify-center text-[10px] font-bold">
+                      {adminInitials}
+                    </div>
+                  )}
                 </div>
                 <span className="text-xs font-semibold text-white hidden md:inline truncate max-w-[120px]">
                   {adminName.split(' ')[0]}
                 </span>
-                <ChevronDown className="w-3 h-3 text-gray-400 hidden md:inline" />
+                <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
               </button>
 
               {showProfileMenu && (
-                <div className="absolute right-0 mt-2 w-64 bg-[#1F2937] border border-gray-700 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-100 font-poppins">
+                <div className="absolute right-0 mt-2 w-68 bg-[#1F2937] border border-gray-700 rounded-2xl shadow-2xl py-2 z-50 animate-in fade-in zoom-in-95 duration-100 font-poppins">
                   <div className="px-4 py-3 border-b border-gray-700/80 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#0F9D58] shrink-0 bg-gray-900">
-                      <img src={adminPhoto} alt={adminName} className="w-full h-full object-cover" />
+                    <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-[#0F9D58] shrink-0 bg-gray-900 flex items-center justify-center">
+                      {adminPhoto ? (
+                        <img src={adminPhoto} alt={adminName} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-tr from-[#0F9D58] to-emerald-400 text-white flex items-center justify-center text-sm font-black">
+                          {adminInitials}
+                        </div>
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-bold text-white truncate">{adminName}</p>
-                      <p className="text-[10px] text-emerald-400 font-medium truncate">{adminPoste}</p>
-                      <p className="text-[10px] text-gray-400 truncate">{adminEmail}</p>
+                      <p className="text-[11px] text-gray-400 truncate">{adminPoste}</p>
+                      <p className="text-[10px] text-emerald-400 truncate">{adminEmail}</p>
                     </div>
                   </div>
 
                   <div className="p-2 space-y-1">
-                    <div className="px-3 py-1.5 text-[11px] text-gray-400 flex items-center gap-2">
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                       <ShieldCheck className="w-3.5 h-3.5 text-[#0F9D58]" />
                       <span>Rôle : {currentAdmin?.role === 'superadmin' ? 'Super Administrateur' : 'Gestionnaire RH'}</span>
                     </div>
+
+                    {/* Button to open HR Profile & Photo Modal */}
+                    {onOpenRhProfileModal && (
+                      <button
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          onOpenRhProfileModal();
+                        }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded-xl transition-all text-left cursor-pointer"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Modifier photo & profil RH</span>
+                      </button>
+                    )}
 
                     {onLogoutRH && (
                       <button
@@ -183,23 +215,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                           setShowProfileMenu(false);
                           onLogoutRH();
                         }}
-                        className="w-full mt-1 flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all text-left cursor-pointer"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-left cursor-pointer"
                       >
                         <LogOut className="w-3.5 h-3.5" />
-                        <span>Se déconnecter (Changer d'admin)</span>
+                        <span>Se déconnecter de l'espace RH</span>
                       </button>
                     )}
                   </div>
                 </div>
               )}
             </div>
-          </div>
-        ) : (
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-gray-900/60 rounded-full border border-gray-800 text-[11px] text-gray-400">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-            <span>Non connecté</span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </header>
   );

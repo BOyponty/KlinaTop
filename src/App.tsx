@@ -4,6 +4,7 @@ import { Sidebar, WebTab } from './components/Sidebar';
 import { CameraModal } from './components/CameraModal';
 import { PhotoDetailModal } from './components/PhotoDetailModal';
 import { AddEmployeeModal } from './components/AddEmployeeModal';
+import { RhProfileModal } from './components/web/RhProfileModal';
 
 // Web Views
 import { DashboardView } from './components/web/DashboardView';
@@ -38,11 +39,12 @@ import {
   addPointageToFirestore,
   registerUserInFirestore,
   updateUserInFirestore,
+  updateAdminInFirestore,
 } from './lib/firestoreService';
 
 export default function App() {
   const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>('web');
-  
+
   // RH Administrator multi-user state with localStorage persistence
   const [admins, setAdmins] = useState<RhAdminUser[]>(initialAdmins);
   const [currentAdmin, setCurrentAdmin] = useState<RhAdminUser | null>(() => {
@@ -203,14 +205,30 @@ export default function App() {
   // Modals state
   const [isAddEmployeeModalOpen, setIsAddEmployeeModalOpen] = useState(false);
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
+  const [isRhProfileModalOpen, setIsRhProfileModalOpen] = useState(false);
   const [inspectPointage, setInspectPointage] = useState<Pointage | null>(null);
   const [photoCaptured, setPhotoCaptured] = useState<string | null>(null);
 
+  // Update RH Administrator Profile & Photo
+  const handleUpdateRhProfile = async (updatedAdmin: RhAdminUser) => {
+    setCurrentAdmin(updatedAdmin);
+    setAdmins((prev) => prev.map((a) => (a.id === updatedAdmin.id ? updatedAdmin : a)));
+    try {
+      localStorage.setItem('klinatop_logged_rh_user', JSON.stringify(updatedAdmin));
+      await updateAdminInFirestore(updatedAdmin.id, updatedAdmin);
+    } catch (err) {
+      console.error('Error saving updated admin profile to Firestore:', err);
+    }
+  };
+
   // Check-In Action handler from Field Agent Mobile App
-  const handlePerformCheckIn = async (photoUrl: string, address: string) => {
+  const handlePerformCheckIn = async (photoUrl: string, address: string, coords?: { lat: number; lng: number }) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
+
+    const latVal = coords?.lat || 6.3774;
+    const lngVal = coords?.lng || 2.3903;
 
     const newPointage: Pointage = {
       id: `ptg-${Date.now()}`,
@@ -222,8 +240,8 @@ export default function App() {
       timestamp: now.toISOString(),
       formattedTime: timeStr,
       formattedDate: dateStr,
-      latitude: 6.3532,
-      longitude: 2.4211,
+      latitude: latVal,
+      longitude: lngVal,
       adresse: address || 'Avenue Jean Paul II, Cotonou, Bénin',
       siteName: 'Site KlinaTop Main',
       photoUrl,
@@ -284,10 +302,13 @@ export default function App() {
   };
 
   // Check-Out Action handler from Field Agent Mobile App
-  const handlePerformCheckOut = async (photoUrl: string) => {
+  const handlePerformCheckOut = async (photoUrl: string, address?: string, coords?: { lat: number; lng: number }) => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
+
+    const latVal = coords?.lat || 6.3774;
+    const lngVal = coords?.lng || 2.3903;
 
     const newPointage: Pointage = {
       id: `ptg-${Date.now()}`,
@@ -299,9 +320,9 @@ export default function App() {
       timestamp: now.toISOString(),
       formattedTime: timeStr,
       formattedDate: dateStr,
-      latitude: 6.3532,
-      longitude: 2.4211,
-      adresse: 'Boulevard de la Marina, Cotonou, Bénin',
+      latitude: latVal,
+      longitude: lngVal,
+      adresse: address || 'Boulevard de la Marina, Cotonou, Bénin',
       siteName: 'Site KlinaTop Main',
       photoUrl,
     };
@@ -435,13 +456,14 @@ export default function App() {
       {/* Top Header Navbar - Only visible on desktop/tablets for preview and role-switching */}
       {!isSmallScreen && (
         <Navbar
-          currentMode={currentMode}
-          onModeChange={(mode) => setCurrentMode(mode)}
-          currentUser={selectedAgent}
-          allAgents={users}
+          currentView={currentMode}
+          onToggleView={(mode) => setCurrentMode(mode)}
+          agents={users}
+          selectedAgent={selectedAgent}
           onSelectAgent={handleSelectAgent}
           onResetData={handleResetData}
           onLogoutRH={handleLogoutRH}
+          onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
           isRhAuthenticated={isRhAuthenticated}
           currentAdmin={currentAdmin}
         />
@@ -459,11 +481,13 @@ export default function App() {
           <div className="flex flex-1">
             {/* Web Dashboard Left Sidebar */}
             <Sidebar
-              activeTab={activeWebTab}
+              currentTab={activeWebTab}
               onSelectTab={(tab) => setActiveWebTab(tab)}
               onOpenAddModal={() => setIsAddEmployeeModalOpen(true)}
               totalEmployeesCount={users.length}
               onLogoutRH={handleLogoutRH}
+              currentAdmin={currentAdmin}
+              onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
             />
 
             {/* Web Main Content Area */}
@@ -473,7 +497,7 @@ export default function App() {
                   users={users}
                   presences={presences}
                   pointages={pointages}
-                  onNavigate={(tab) => setActiveWebTab(tab)}
+                  onNavigate={(tab) => setActiveWebTab(tab as WebTab)}
                   onInspectPhoto={(ptg) => setInspectPointage(ptg)}
                 />
               )}
@@ -556,6 +580,13 @@ export default function App() {
       )}
 
       {/* Modals */}
+      <RhProfileModal
+        isOpen={isRhProfileModalOpen}
+        onClose={() => setIsRhProfileModalOpen(false)}
+        admin={currentAdmin}
+        onSaveProfile={handleUpdateRhProfile}
+      />
+
       <AddEmployeeModal
         isOpen={isAddEmployeeModalOpen}
         onClose={() => setIsAddEmployeeModalOpen(false)}
