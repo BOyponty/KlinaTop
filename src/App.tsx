@@ -97,7 +97,6 @@ export default function App() {
     const unsubUsers = subscribeToUsers((firestoreUsers) => {
       if (firestoreUsers.length > 0) {
         setUsers(firestoreUsers);
-        // keep selected agent in sync if found
         setSelectedAgent((curr) => {
           try {
             const savedUser = localStorage.getItem('klinatop_logged_agent_user');
@@ -106,23 +105,12 @@ export default function App() {
             if (targetId) {
               const savedMatch = firestoreUsers.find((u) => u.id === targetId);
               if (savedMatch) {
-                try {
-                  localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(savedMatch));
-                  localStorage.setItem('klinatop_logged_agent_id', savedMatch.id);
-                } catch (e) {}
                 return savedMatch;
               }
             }
           } catch (e) {}
           const match = curr ? firestoreUsers.find((u) => u.id === curr.id) : null;
-          const finalUser = match || curr || firestoreUsers[0];
-          if (finalUser) {
-            try {
-              localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(finalUser));
-              localStorage.setItem('klinatop_logged_agent_id', finalUser.id);
-            } catch (e) {}
-          }
-          return finalUser;
+          return match || curr || firestoreUsers[0];
         });
       }
     });
@@ -148,7 +136,6 @@ export default function App() {
     const unsubAdmins = subscribeToAdmins((firestoreAdmins) => {
       if (firestoreAdmins.length > 0) {
         setAdmins(firestoreAdmins);
-        // Update currentAdmin if matching
         setCurrentAdmin((curr) => {
           if (!curr) return null;
           const currEmail = (curr.email || '').toLowerCase();
@@ -247,7 +234,6 @@ export default function App() {
       photoUrl,
     };
 
-    // Optimistic UI update
     setPointages((prev) => [newPointage, ...prev]);
 
     const presenceUpdate: Partial<Presence> = {
@@ -258,7 +244,6 @@ export default function App() {
       duree: 'En cours',
     };
 
-    // Update presence sheet locally
     setPresences((prev) => {
       const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
       if (existingIndex >= 0) {
@@ -293,7 +278,6 @@ export default function App() {
     setCheckInTime(timeStr);
     setPhotoCaptured(null);
 
-    // Save to Cloud Firestore
     try {
       await addPointageToFirestore(newPointage, presenceUpdate);
     } catch (err) {
@@ -327,7 +311,6 @@ export default function App() {
       photoUrl,
     };
 
-    // Optimistic UI update
     setPointages((prev) => [newPointage, ...prev]);
 
     const presenceUpdate: Partial<Presence> = {
@@ -337,7 +320,6 @@ export default function App() {
       dureeMinutes: 480,
     };
 
-    // Update presence sheet
     setPresences((prev) =>
       prev.map((p) => {
         if (p.userId === selectedAgent.id) {
@@ -353,7 +335,6 @@ export default function App() {
     setIsCheckedIn(false);
     setPhotoCaptured(null);
 
-    // Save to Cloud Firestore
     try {
       await addPointageToFirestore(newPointage, presenceUpdate);
     } catch (err) {
@@ -392,11 +373,9 @@ export default function App() {
   };
 
   const handleUpdateAgentPhoto = async (userId: string, photoUrl: string) => {
-    // Update users list
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, photoUrl } : u))
     );
-    // Update selected agent if matches
     setSelectedAgent((curr) => {
       if (curr.id === userId) {
         const updated = { ...curr, photoUrl };
@@ -407,7 +386,6 @@ export default function App() {
       }
       return curr;
     });
-    // Persist to Cloud Firestore
     try {
       await updateUserInFirestore(userId, { photoUrl });
     } catch (err) {
@@ -453,14 +431,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-gray-900 font-poppins flex flex-col">
-      {/* Top Header Navbar - Only visible on desktop/tablets for preview and role-switching */}
+      {/* Top Header Navbar */}
       {!isSmallScreen && (
         <Navbar
-          currentView={currentMode}
-          onToggleView={(mode) => setCurrentMode(mode)}
-          agents={users}
-          selectedAgent={selectedAgent}
-          onSelectAgent={handleSelectAgent}
+          currentMode={currentMode}
+          onModeChange={(mode) => setCurrentMode(mode)}
           onResetData={handleResetData}
           onLogoutRH={handleLogoutRH}
           onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
@@ -543,7 +518,7 @@ export default function App() {
           </div>
         )
       ) : (
-        /* Mobile Mode (Edge-to-Edge on real mobile devices, Mockup on desktop) */
+        /* Mobile Mode */
         <main
           className={
             isSmallScreen
