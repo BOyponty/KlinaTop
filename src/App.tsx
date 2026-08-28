@@ -39,6 +39,7 @@ import {
   addPointageToFirestore,
   registerUserInFirestore,
   updateUserInFirestore,
+  deleteUserFromFirestore,
   updateAdminInFirestore,
 } from './lib/firestoreService';
 
@@ -386,7 +387,6 @@ export default function App() {
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, photoUrl } : u))
     );
-    // Update selected agent if matches
     setSelectedAgent((curr) => {
       if (curr && curr.id === userId) {
         const updated = { ...curr, photoUrl };
@@ -404,9 +404,23 @@ export default function App() {
     }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    if (window.confirm('Voulez-vous vraiment supprimer cet employé de la base KlinaTop ?')) {
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm('Voulez-vous vraiment supprimer cet employé de la base KlinaTop ? Cette action supprimera définitivement le compte dans Firebase.')) {
+      // Immediate local state update
       setUsers((prev) => prev.filter((u) => u.id !== userId));
+
+      // If deleted agent is currently logged into the mobile simulation, log them out
+      if (selectedAgent && selectedAgent.id === userId) {
+        handleSelectAgent(null);
+      }
+
+      // Permanent deletion in Firestore (syncs in real-time across all devices)
+      try {
+        await deleteUserFromFirestore(userId);
+      } catch (err) {
+        console.error('Erreur lors de la suppression de l\'employé dans Firestore:', err);
+        alert('Erreur lors de la suppression dans la base de données. Veuillez réessayer.');
+      }
     }
   };
 
