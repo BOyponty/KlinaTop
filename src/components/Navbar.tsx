@@ -1,10 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Smartphone, LayoutDashboard, Bell, Mail, RefreshCw, LogOut, ShieldCheck, ChevronDown, Camera } from 'lucide-react';
-import { RhAdminUser } from '../types';
+import {
+  Smartphone,
+  LayoutDashboard,
+  Search,
+  Bell,
+  Mail,
+  RefreshCw,
+  UserCheck,
+  LogOut,
+  ShieldCheck,
+  ChevronDown,
+  Camera,
+} from 'lucide-react';
+import { User, RhAdminUser } from '../types';
 
 interface NavbarProps {
   currentMode: 'web' | 'mobile';
   onModeChange: (mode: 'web' | 'mobile') => void;
+  currentUser?: User;
+  allAgents?: User[];
+  onSelectAgent?: (agent: User) => void;
   onResetData: () => void;
   onLogoutRH?: () => void;
   onOpenRhProfileModal?: () => void;
@@ -15,6 +30,9 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentMode,
   onModeChange,
+  currentUser,
+  allAgents = [],
+  onSelectAgent,
   onResetData,
   onLogoutRH,
   onOpenRhProfileModal,
@@ -40,20 +58,31 @@ export const Navbar: React.FC<NavbarProps> = ({
   const adminPhoto = currentAdmin?.photoUrl;
   const adminInitials = currentAdmin?.initiales || (
     adminName.trim()
-      ? adminName.trim().split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase()
+      ? adminName.trim().split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase()
       : 'RH'
   );
 
   return (
     <header className="sticky top-0 z-40 bg-[#1F2937] text-white border-b border-gray-700/80 shadow-sm px-4 lg:px-6 py-2.5">
-      <div className="flex items-center justify-between gap-4 max-w-7xl mx-auto w-full">
-        {/* Gauche : Identique à la photo 1 */}
-        <div className="flex items-center gap-2 text-xs font-semibold text-gray-300 shrink-0">
-          <ShieldCheck className="w-4 h-4 text-[#0F9D58]" />
-          <span>Portail d'entreprise KlinaTop</span>
-        </div>
+      <div className="flex items-center justify-between gap-4 w-full">
+        {/* Left: Search Bar when authenticated, or Brand title */}
+        {isRhAuthenticated && currentMode === 'web' ? (
+          <div className="relative w-64 md:w-80">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="w-full bg-gray-900/90 border border-gray-700/80 rounded-full pl-10 pr-4 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-[#0F9D58] transition-all"
+            />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs font-semibold text-gray-300 shrink-0">
+            <ShieldCheck className="w-4 h-4 text-[#0F9D58]" />
+            <span>Portail d'entreprise KlinaTop</span>
+          </div>
+        )}
 
-        {/* Centre : Boutons Dashboard RH / App Agent + Bouton Rafraîchir */}
+        {/* Center: Switcher (Dashboard RH / App Agent) + Agent Selector + Refresh Button */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-gray-900/80 p-1 rounded-xl border border-gray-700/80">
             <button
@@ -83,29 +112,55 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
+          {/* Agent Selector Dropdown */}
+          {allAgents && allAgents.length > 0 && currentUser && (
+            <div className="hidden lg:flex items-center gap-1.5 bg-gray-900/80 px-2.5 py-1.5 rounded-xl border border-gray-700/80 text-xs">
+              <UserCheck className="w-3.5 h-3.5 text-[#0F9D58]" />
+              <select
+                value={currentUser.id}
+                onChange={(e) => {
+                  const found = allAgents.find((a) => a.id === e.target.value);
+                  if (found && onSelectAgent) {
+                    onSelectAgent(found);
+                  }
+                }}
+                className="bg-transparent text-white text-xs font-medium outline-none cursor-pointer pr-1 max-w-[150px] truncate"
+              >
+                {allAgents.map((ag) => (
+                  <option key={ag.id} value={ag.id} className="bg-gray-900 text-white">
+                    {ag.nom}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Refresh Data Button */}
           <button
             type="button"
             onClick={onResetData}
             title="Rafraîchir les données"
-            className="p-1.5 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors text-xs cursor-pointer"
+            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors text-xs cursor-pointer border border-gray-700/60"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        {/* Droite : Non connecté ou Profil RH connecté */}
+        {/* Right Section: Notifications, Messages, and Round Admin Avatar */}
         <div className="flex items-center gap-3 shrink-0">
           {isRhAuthenticated && currentAdmin && currentMode === 'web' ? (
             <div className="flex items-center gap-3">
+              {/* Notification Bell with red badge */}
               <button
                 type="button"
                 title="Notifications"
                 className="relative text-gray-300 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-800 cursor-pointer"
               >
                 <Bell className="w-4 h-4" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-[#0F9D58] rounded-full ring-2 ring-[#1F2937]"></span>
+                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-[#1F2937]"></span>
               </button>
 
+              {/* Messages Mail icon */}
               <button
                 type="button"
                 title="Messages"
@@ -114,26 +169,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Mail className="w-4 h-4" />
               </button>
 
+              {/* Round Profile Avatar with Dropdown */}
               <div className="relative" ref={menuRef}>
                 <button
                   type="button"
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
                   title="Mon profil Administrateur"
-                  className="flex items-center gap-2 pl-2 pr-1.5 py-1 rounded-full bg-gray-800/80 hover:bg-gray-800 border border-gray-700/80 hover:border-[#0F9D58] transition-all cursor-pointer"
+                  className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#0F9D58] shadow-md bg-gray-900 shrink-0 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-emerald-400/50 transition-all"
                 >
-                  <div className="w-7 h-7 rounded-full overflow-hidden border border-[#0F9D58] shadow-sm bg-gray-900 shrink-0 flex items-center justify-center">
-                    {adminPhoto ? (
-                      <img src={adminPhoto} alt={adminName} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-[#0F9D58] text-white flex items-center justify-center text-[10px] font-bold">
-                        {adminInitials}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-xs font-semibold text-white hidden md:inline truncate max-w-[120px]">
-                    {adminName.split(' ')[0]}
-                  </span>
-                  <ChevronDown className="w-3 h-3 text-gray-400 hidden md:inline" />
+                  {adminPhoto ? (
+                    <img src={adminPhoto} alt={adminName} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-[#0F9D58] text-white flex items-center justify-center text-xs font-bold">
+                      {adminInitials}
+                    </div>
+                  )}
                 </button>
 
                 {showProfileMenu && (
