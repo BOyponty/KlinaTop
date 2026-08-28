@@ -97,6 +97,7 @@ export default function App() {
     const unsubUsers = subscribeToUsers((firestoreUsers) => {
       if (firestoreUsers.length > 0) {
         setUsers(firestoreUsers);
+        // keep selected agent in sync if an agent is already legitimately logged in
         setSelectedAgent((curr) => {
           try {
             const savedUser = localStorage.getItem('klinatop_logged_agent_user');
@@ -109,8 +110,7 @@ export default function App() {
               }
             }
           } catch (e) {}
-          const match = curr ? firestoreUsers.find((u) => u.id === curr.id) : null;
-          return match || curr || firestoreUsers[0];
+          return curr;
         });
       }
     });
@@ -166,8 +166,8 @@ export default function App() {
   const [pointages, setPointages] = useState<Pointage[]>(initialPointages);
   const [exportHistory, setExportHistory] = useState<PayrollExportHistory[]>(initialExportHistory);
 
-  // Active Agent for Mobile Simulation with persistent fallback
-  const [selectedAgent, setSelectedAgent] = useState<User>(() => {
+  // Active Agent for Mobile Session (only set if actually logged in)
+  const [selectedAgent, setSelectedAgent] = useState<User | null>(() => {
     try {
       const savedUser = localStorage.getItem('klinatop_logged_agent_user');
       if (savedUser) {
@@ -184,7 +184,7 @@ export default function App() {
     } catch (e) {
       console.warn('Error reading saved agent user from localStorage', e);
     }
-    return initialUsers[0];
+    return null;
   });
   const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
   const [checkInTime, setCheckInTime] = useState<string>('07:45');
@@ -210,6 +210,7 @@ export default function App() {
 
   // Check-In Action handler from Field Agent Mobile App
   const handlePerformCheckIn = async (photoUrl: string, address: string, coords?: { lat: number; lng: number }) => {
+    if (!selectedAgent) return;
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
@@ -287,6 +288,7 @@ export default function App() {
 
   // Check-Out Action handler from Field Agent Mobile App
   const handlePerformCheckOut = async (photoUrl: string, address?: string, coords?: { lat: number; lng: number }) => {
+    if (!selectedAgent) return;
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
@@ -364,7 +366,15 @@ export default function App() {
     );
   };
 
-  const handleSelectAgent = (agent: User) => {
+  const handleSelectAgent = (agent: User | null) => {
+    if (!agent) {
+      try {
+        localStorage.removeItem('klinatop_logged_agent_id');
+        localStorage.removeItem('klinatop_logged_agent_user');
+      } catch (e) {}
+      setSelectedAgent(null);
+      return;
+    }
     try {
       localStorage.setItem('klinatop_logged_agent_id', agent.id);
       localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(agent));
@@ -376,8 +386,9 @@ export default function App() {
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, photoUrl } : u))
     );
+    // Update selected agent if matches
     setSelectedAgent((curr) => {
-      if (curr.id === userId) {
+      if (curr && curr.id === userId) {
         const updated = { ...curr, photoUrl };
         try {
           localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(updated));
@@ -456,7 +467,7 @@ export default function App() {
           <div className="flex flex-1">
             {/* Web Dashboard Left Sidebar */}
             <Sidebar
-              currentTab={activeWebTab}
+              activeTab={activeWebTab}
               onSelectTab={(tab) => setActiveWebTab(tab)}
               onOpenAddModal={() => setIsAddEmployeeModalOpen(true)}
               totalEmployeesCount={users.length}

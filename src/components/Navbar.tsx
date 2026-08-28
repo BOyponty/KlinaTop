@@ -6,20 +6,16 @@ import {
   Bell,
   Mail,
   RefreshCw,
-  UserCheck,
   LogOut,
   ShieldCheck,
   ChevronDown,
   Camera,
 } from 'lucide-react';
-import { User, RhAdminUser } from '../types';
+import { RhAdminUser } from '../types';
 
 interface NavbarProps {
   currentMode: 'web' | 'mobile';
   onModeChange: (mode: 'web' | 'mobile') => void;
-  currentUser?: User;
-  allAgents?: User[];
-  onSelectAgent?: (agent: User) => void;
   onResetData: () => void;
   onLogoutRH?: () => void;
   onOpenRhProfileModal?: () => void;
@@ -30,9 +26,6 @@ interface NavbarProps {
 export const Navbar: React.FC<NavbarProps> = ({
   currentMode,
   onModeChange,
-  currentUser,
-  allAgents = [],
-  onSelectAgent,
   onResetData,
   onLogoutRH,
   onOpenRhProfileModal,
@@ -65,7 +58,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-[#1F2937] text-white border-b border-gray-700/80 shadow-sm px-4 lg:px-6 py-2.5">
       <div className="flex items-center justify-between gap-4 w-full">
-        {/* Left: Search Bar when authenticated, or Brand title */}
+        {/* Left: Search Bar when authenticated in Web mode, or Brand title */}
         {isRhAuthenticated && currentMode === 'web' ? (
           <div className="relative w-64 md:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -82,7 +75,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         )}
 
-        {/* Center: Switcher (Dashboard RH / App Agent) + Agent Selector + Refresh Button */}
+        {/* Center: Switcher (Dashboard RH / App Agent) + Refresh Button */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-gray-900/80 p-1 rounded-xl border border-gray-700/80">
             <button
@@ -112,29 +105,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* Agent Selector Dropdown */}
-          {allAgents && allAgents.length > 0 && currentUser && (
-            <div className="hidden lg:flex items-center gap-1.5 bg-gray-900/80 px-2.5 py-1.5 rounded-xl border border-gray-700/80 text-xs">
-              <UserCheck className="w-3.5 h-3.5 text-[#0F9D58]" />
-              <select
-                value={currentUser.id}
-                onChange={(e) => {
-                  const found = allAgents.find((a) => a.id === e.target.value);
-                  if (found && onSelectAgent) {
-                    onSelectAgent(found);
-                  }
-                }}
-                className="bg-transparent text-white text-xs font-medium outline-none cursor-pointer pr-1 max-w-[150px] truncate"
-              >
-                {allAgents.map((ag) => (
-                  <option key={ag.id} value={ag.id} className="bg-gray-900 text-white">
-                    {ag.nom}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
           {/* Refresh Data Button */}
           <button
             type="button"
@@ -146,7 +116,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* Right Section: Notifications, Messages, and Round Admin Avatar */}
+        {/* Right Section: Connected Admin Profile OR Non Connecté */}
         <div className="flex items-center gap-3 shrink-0">
           {isRhAuthenticated && currentAdmin && currentMode === 'web' ? (
             <div className="flex items-center gap-3">
