@@ -6,15 +6,28 @@ import {
   MapPin,
   Camera,
   Calendar,
-  MoreVertical,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
   ArrowUpRight,
   ArrowDownRight,
   Eye,
-  ChevronRight,
   Clock,
   Sparkles,
+  Info,
+  CalendarDays,
 } from 'lucide-react';
 import { User, Presence, Pointage } from '../../types';
+import {
+  getTodayISO,
+  formatFullFrenchDate,
+  formatShortDate,
+  addDays,
+  isToday,
+  isYesterday,
+  isFuture,
+} from '../../utils/dateUtils';
+import { CalendarDropdown } from '../common/CalendarDropdown';
 
 interface DashboardViewProps {
   users: User[];
@@ -31,34 +44,184 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigate,
   onInspectPhoto,
 }) => {
-  const [selectedDate, setSelectedDate] = useState('Aujourd\'hui');
+  // Current selected date (defaults to dynamic today date ISO, e.g. "2026-08-31")
+  const [selectedDate, setSelectedDate] = useState<string>(getTodayISO());
 
-  // Stats calculation
-  const totalEmployees = users.length;
-  const presentsCount = presences.filter((p) => p.statut === 'présent' || p.statut === 'en_poste').length;
-  const absentsCount = presences.filter((p) => p.statut === 'absent').length;
-  const gpsCheckinsCount = pointages.length;
-  const photosUploadedCount = pointages.filter((p) => p.photoUrl).length;
+  const isSelectedToday = isToday(selectedDate);
+  const isSelectedYesterday = isYesterday(selectedDate);
 
-  const presentPercentage = totalEmployees > 0 ? Math.round((presentsCount / totalEmployees) * 100) : 0;
-  const absentPercentage = totalEmployees > 0 ? Math.round((absentsCount / totalEmployees) * 100) : 0;
+  // Quick navigation handlers
+  const handlePrevDay = () => {
+    setSelectedDate((prev) => addDays(prev, -1));
+  };
+
+  const handleNextDay = () => {
+    if (!isFuture(addDays(selectedDate, 1))) {
+      setSelectedDate((prev) => addDays(prev, 1));
+    }
+  };
+
+  const handleResetToToday = () => {
+    setSelectedDate(getTodayISO());
+  };
+
+  // 1. Filter / Synthesize Presences for the selected date
+  // We match active employees to either existing presence records for this date, or present default status
+  const existingPresencesForDate = presences.filter((p) => p.date === selectedDate);
+
+  const displayedPresences: Presence[] = users
+    .filter((u) => u.statut === 'Actif' && u.role === 'agent')
+    .map((user) => {
+      const found = existingPresencesForDate.find((p) => p.userId === user.id);
+      if (found) {
+        return found;
+      }
+      // If no presence recorded for this date:
+      return {
+        id: `synth-${user.id}-${selectedDate}`,
+        userId: user.id,
+        userName: user.nom,
+        userPoste: user.poste,
+        userPhoto: user.photoUrl,
+        equipeNom: user.equipeNom,
+        date: selectedDate,
+        heureCheckin: null,
+        heureCheckout: null,
+        duree: '0h 0m',
+        dureeMinutes: 0,
+        statut: 'absent',
+      } as Presence;
+    });
+
+  // 2. Filter Pointages for the selected date
+  const pointagesForSelectedDate = pointages.filter((ptg) => {
+    // Timestamp matching selected date
+    const ptgDate = ptg.timestamp ? ptg.timestamp.split('T')[0] : '';
+    return ptgDate === selectedDate;
+  });
+
+  // Fallback to all recent pointages if none found on a historical date so feed stays informative
+  const displayedPointages =
+    pointagesForSelectedDate.length > 0 ? pointagesForSelectedDate : pointages.slice(0, 5);
+
+  // 3. Stats calculation for the chosen date
+  const totalEmployees = users.filter((u) => u.role === 'agent' && u.statut === 'Actif').length;
+  const presentsCount = displayedPresences.filter(
+    (p) => p.statut === 'présent' || p.statut === 'en_poste'
+  ).length;
+  const retardsCount = displayedPresences.filter((p) => p.statut === 'retard').length;
+  const absentsCount = displayedPresences.filter((p) => p.statut === 'absent').length;
+  const gpsCheckinsCount = pointagesForSelectedDate.length > 0 
+    ? pointagesForSelectedDate.length 
+    : isSelectedToday 
+      ? pointages.length 
+      : presentsCount;
+  const photosUploadedCount = pointagesForSelectedDate.length > 0
+    ? pointagesForSelectedDate.filter((p) => p.photoUrl).length
+    : isSelectedToday
+      ? pointages.filter((p) => p.photoUrl).length
+      : displayedPresences.filter((p) => p.photoCheckinUrl).length;
+
+  const presentPercentage =
+    totalEmployees > 0 ? Math.round(((presentsCount + retardsCount) / totalEmployees) * 100) : 0;
+  const absentPercentage =
+    totalEmployees > 0 ? Math.round((absentsCount / totalEmployees) * 100) : 0;
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-fadeIn">
-      {/* Top Header & Date Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Top Header & Date Controller */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-gray-200/90 shadow-xs">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 font-poppins">Aperçu du Tableau de Bord</h2>
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-2xl font-bold text-gray-900 font-poppins">Aperçu du Tableau de Bord</h2>
+            {isSelectedToday ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-[#0F9D58] border border-emerald-200 animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#0F9D58]"></span> En Direct
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700 border border-blue-200">
+                <CalendarDays className="w-3.5 h-3.5" /> Historique ({formatShortDate(selectedDate)})
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-500 font-poppins mt-0.5">
-            Suivi en temps réel des présences de l'équipe de nettoyage KlinaTop
+            {isSelectedToday
+              ? "Suivi en temps réel des présences de l'équipe de nettoyage KlinaTop"
+              : `Consultation de la feuille d'émargement et pointages du ${formatFullFrenchDate(selectedDate)}`}
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3.5 py-2 shadow-xs cursor-pointer hover:border-[#0F9D58] transition-colors">
-          <Calendar className="w-4 h-4 text-[#0F9D58]" />
-          <span className="text-xs font-semibold text-gray-700">Aujourd'hui, 12 Août 2026</span>
+        {/* Date Selector and Navigation Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Day Stepper (< >) */}
+          <div className="flex items-center bg-gray-100/80 p-1 rounded-2xl border border-gray-200">
+            <button
+              type="button"
+              onClick={handlePrevDay}
+              title="Jour précédent"
+              className="p-1.5 hover:bg-white text-gray-700 hover:text-[#0F9D58] rounded-xl transition-all cursor-pointer shadow-xs"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={handleNextDay}
+              disabled={isFuture(addDays(selectedDate, 1)) || isSelectedToday}
+              title="Jour suivant"
+              className={`p-1.5 rounded-xl transition-all cursor-pointer shadow-xs ${
+                isFuture(addDays(selectedDate, 1)) || isSelectedToday
+                  ? 'text-gray-300 cursor-not-allowed'
+                  : 'hover:bg-white text-gray-700 hover:text-[#0F9D58]'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Interactive Date Picker Dropdown with Popover Calendar */}
+          <CalendarDropdown
+            selectedDate={selectedDate}
+            onSelectDate={(newDate) => setSelectedDate(newDate)}
+            availableDatesWithData={Array.from(new Set(presences.map((p) => p.date)))}
+            align="right"
+          />
+
+          {/* Quick "Aujourd'hui" reset button when viewing previous dates */}
+          {!isSelectedToday && (
+            <button
+              type="button"
+              onClick={handleResetToToday}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-[#0F9D58] font-bold text-xs rounded-2xl border border-emerald-200 transition-all cursor-pointer shadow-xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Aujourd'hui</span>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Historical Date Notice banner if not today */}
+      {!isSelectedToday && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl p-3.5 px-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-900 shadow-xs animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+              <Info className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold">Mode Historique :</span> Affichage des présences et indicateurs du{' '}
+              <strong className="text-blue-950 font-bold">{formatFullFrenchDate(selectedDate)}</strong>.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleResetToToday}
+            className="text-xs font-bold text-blue-700 bg-white hover:bg-blue-100/60 px-3 py-1.5 rounded-xl border border-blue-200 transition-colors self-start sm:self-auto cursor-pointer"
+          >
+            Revenir au direct (Aujourd'hui)
+          </button>
+        </div>
+      )}
 
       {/* 5 Stats Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -69,7 +232,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Users className="w-5 h-5" />
             </div>
           </div>
-          <p className="text-xs font-medium text-gray-500">Total Employés</p>
+          <p className="text-xs font-medium text-gray-500">Effectif Actif</p>
           <h3 className="text-2xl font-bold text-gray-900 mt-1">{totalEmployees}</h3>
         </div>
 
@@ -83,8 +246,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <ArrowUpRight className="w-3 h-3" /> {presentPercentage}%
             </span>
           </div>
-          <p className="text-xs font-medium text-gray-500">Présents</p>
-          <h3 className="text-2xl font-bold text-gray-900 mt-1">{presentsCount}</h3>
+          <p className="text-xs font-medium text-gray-500">
+            {isSelectedToday ? 'Présents du jour' : 'Présents le jour J'}
+          </p>
+          <h3 className="text-2xl font-bold text-gray-900 mt-1">{presentsCount + retardsCount}</h3>
         </div>
 
         {/* Absents */}
@@ -126,18 +291,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* Main Content Layout: Table (Left 2 cols) + Recent Pointages Feed (Right 1 col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Table "Présences du jour" */}
+        {/* Table "Présences" */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-xs overflow-hidden flex flex-col">
           <div className="p-5 border-b border-gray-200 flex items-center justify-between bg-gray-50/50">
             <div>
-              <h3 className="font-bold text-base text-gray-900 font-poppins">Présences du jour</h3>
-              <p className="text-xs text-gray-500">Feuille d'émargement automatique avec preuves photo/GPS</p>
+              <h3 className="font-bold text-base text-gray-900 font-poppins">
+                {isSelectedToday
+                  ? 'Présences du jour'
+                  : `Présences du ${formatShortDate(selectedDate)}`}
+              </h3>
+              <p className="text-xs text-gray-500">
+                {isSelectedToday
+                  ? "Feuille d'émargement automatique avec preuves photo/GPS en direct"
+                  : `Émargement enregistré pour le ${formatFullFrenchDate(selectedDate)}`}
+              </p>
             </div>
             <button
               onClick={() => onNavigate('attendance')}
-              className="text-[#0F9D58] font-semibold text-xs hover:underline flex items-center gap-1"
+              className="text-[#0F9D58] font-semibold text-xs hover:underline flex items-center gap-1 cursor-pointer"
             >
-              Voir tout <ChevronRight className="w-4 h-4" />
+              Voir tout l'historique <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
@@ -154,7 +327,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
-                {presences.map((p) => {
+                {displayedPresences.map((p) => {
                   return (
                     <tr key={p.id} className="hover:bg-gray-50/80 transition-colors">
                       <td className="py-3.5 px-4 font-semibold text-gray-900 flex items-center gap-3">
@@ -225,7 +398,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 type: 'check-in',
                                 timestamp: new Date().toISOString(),
                                 formattedTime: p.heureCheckin || '08:00',
-                                formattedDate: '12/08/2026',
+                                formattedDate: formatShortDate(selectedDate),
                                 latitude: 6.3532,
                                 longitude: 2.4211,
                                 adresse: p.adresseCheckin || 'Avenue Jean Paul II, Cotonou, Bénin',
@@ -234,7 +407,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               })
                             }
                             title="Inspecter photo & GPS"
-                            className="p-1.5 text-[#0F9D58] hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-semibold"
+                            className="p-1.5 text-[#0F9D58] hover:bg-emerald-50 rounded-lg transition-colors inline-flex items-center gap-1 text-xs font-semibold cursor-pointer"
                           >
                             <Eye className="w-4 h-4" /> Preuve
                           </button>
@@ -254,14 +427,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="bg-white rounded-2xl border border-gray-200 shadow-xs p-5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-base text-gray-900 font-poppins">Pointages récents</h3>
+              <h3 className="font-bold text-base text-gray-900 font-poppins">
+                {pointagesForSelectedDate.length > 0 && !isSelectedToday
+                  ? `Pointages (${formatShortDate(selectedDate)})`
+                  : 'Pointages récents'}
+              </h3>
               <span className="text-[10px] font-semibold bg-emerald-100 text-[#0F9D58] px-2 py-0.5 rounded-full">
-                En direct
+                {isSelectedToday ? 'En direct' : 'Archive'}
               </span>
             </div>
 
             <div className="space-y-4">
-              {pointages.map((ptg) => (
+              {displayedPointages.map((ptg) => (
                 <div
                   key={ptg.id}
                   onClick={() => onInspectPhoto(ptg)}
@@ -299,7 +476,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             onClick={() => onNavigate('pointages')}
-            className="mt-6 w-full py-2.5 text-center text-[#0F9D58] font-semibold text-xs bg-emerald-50 hover:bg-emerald-100 rounded-xl border border-emerald-200 transition-colors flex items-center justify-center gap-1"
+            className="mt-6 w-full py-2.5 text-center text-[#0F9D58] font-semibold text-xs bg-emerald-50 hover:bg-emerald-100 rounded-xl border border-emerald-200 transition-colors flex items-center justify-center gap-1 cursor-pointer"
           >
             Voir tous les pointages (Flux GPS) <ChevronRight className="w-4 h-4" />
           </button>
@@ -308,3 +485,4 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     </div>
   );
 };
+
