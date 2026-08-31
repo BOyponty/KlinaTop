@@ -63,9 +63,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   return (
-    <aside className="w-64 bg-[#1B2533] text-gray-300 flex flex-col h-[calc(100vh-61px)] sticky top-[61px] border-r border-gray-800/80 shrink-0 select-none">
-      {/* Brand Header inside Sidebar with official centered KlinaTop logo badge */}
-      <div className="pt-5 pb-3 flex flex-col items-center justify-center">
+    <aside className="w-full md:w-64 bg-[#1B2533] text-gray-300 flex flex-col md:h-[calc(100vh-61px)] md:sticky top-[49px] sm:top-[57px] border-b md:border-b-0 md:border-r border-gray-800/80 shrink-0 select-none">
+      {/* Brand Header inside Sidebar with official centered KlinaTop logo badge - desktop only */}
+      <div className="hidden md:flex pt-5 pb-3 flex-col items-center justify-center">
         <div className="w-16 h-16 bg-white rounded-2xl p-1.5 shadow-md border border-gray-100 flex items-center justify-center transition-transform hover:scale-105">
           <img
             src={logoImg}
@@ -75,8 +75,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* Add Employee CTA Button */}
-      <div className="px-4 py-2">
+      {/* Add Employee CTA Button - desktop */}
+      <div className="hidden md:block px-4 py-2">
         <button
           onClick={onOpenAddModal}
           className="w-full bg-[#0F9D58] hover:bg-[#0c8047] text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md hover:shadow-emerald-900/20 transition-all transform active:scale-98 cursor-pointer"
@@ -86,8 +86,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </button>
       </div>
 
-      {/* Main Navigation Links */}
-      <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
+      {/* Main Navigation Links: Horizontal scroll on mobile, vertical list on desktop */}
+      <nav className="flex md:flex-col overflow-x-auto md:overflow-y-auto px-2 md:px-3 py-2 md:py-0 space-x-1.5 md:space-x-0 md:space-y-1 scrollbar-none">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -95,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id as WebTab)}
-              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+              className={`flex items-center justify-between px-3 md:px-3.5 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all shrink-0 cursor-pointer ${
                 isActive
                   ? 'bg-[#0F9D58] text-white shadow-md font-semibold'
                   : item.highlight
@@ -103,17 +103,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'text-gray-300 hover:bg-white/5 hover:text-white'
               }`}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
                 <Icon
-                  className={`w-5 h-5 ${
+                  className={`w-4 h-4 md:w-5 md:h-5 ${
                     isActive ? 'text-white' : item.highlight ? 'text-emerald-400' : 'text-gray-400'
                   }`}
                 />
-                <span className="font-poppins">{item.label}</span>
+                <span className="font-poppins whitespace-nowrap">{item.label}</span>
               </div>
               {item.badge !== undefined && (
                 <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                  className={`hidden md:inline-block text-xs px-2 py-0.5 rounded-full font-bold ml-2 ${
                     isActive ? 'bg-white text-[#0F9D58]' : 'bg-gray-800 text-gray-300'
                   }`}
                 >
@@ -125,8 +125,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </nav>
 
-      {/* Bottom Footer Section: Profile card, Support & Logout */}
-      <div className="p-3 border-t border-gray-800/80 bg-gray-900/40 space-y-2">
+      {/* Bottom Footer Section: Profile card, Support & Logout (desktop) */}
+      <div className="hidden md:block p-3 border-t border-gray-800/80 bg-gray-900/40 space-y-2 mt-auto">
         {currentAdmin && (
           <button
             onClick={onOpenRhProfileModal}
@@ -158,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={() => alert('Support RH KlinaTop: Contactez support@klinatop.bj ou le +229 01 00 00 00.')}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all"
         >
           <HelpCircle className="w-4 h-4 text-gray-400" />
           <span className="font-poppins">Support</span>
@@ -166,7 +166,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={onLogoutRH}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all active:scale-98 cursor-pointer"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all active:scale-98"
         >
           <LogOut className="w-4 h-4 text-red-400" />
           <span className="font-poppins">Logout</span>
@@ -175,3 +175,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
+

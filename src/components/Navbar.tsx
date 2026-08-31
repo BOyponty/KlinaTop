@@ -6,12 +6,13 @@ import {
   Bell,
   Mail,
   RefreshCw,
+  UserCheck,
   LogOut,
   ShieldCheck,
   ChevronDown,
   Camera,
 } from 'lucide-react';
-import { RhAdminUser } from '../types';
+import { User, RhAdminUser } from '../types';
 
 interface NavbarProps {
   currentMode: 'web' | 'mobile';
@@ -56,45 +57,51 @@ export const Navbar: React.FC<NavbarProps> = ({
   );
 
   return (
-    <header className="sticky top-0 z-40 bg-[#1F2937] text-white border-b border-gray-700/80 shadow-sm px-4 lg:px-6 py-2.5">
-      <div className="flex items-center justify-between gap-4 w-full">
-        {/* Left: Search Bar when authenticated in Web mode, or Brand title */}
+    <header className="sticky top-0 z-40 bg-[#1F2937] text-white border-b border-gray-700/80 shadow-sm px-3 sm:px-4 lg:px-6 py-2">
+      <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
+        {/* Left: Brand / Title on mobile or Search on desktop */}
         {isRhAuthenticated && currentMode === 'web' ? (
-          <div className="relative w-64 md:w-80">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full bg-gray-900/90 border border-gray-700/80 rounded-full pl-10 pr-4 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-[#0F9D58] transition-all"
-            />
-          </div>
+          <>
+            <div className="hidden md:relative md:block md:w-64">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Rechercher..."
+                className="w-full bg-gray-900/90 border border-gray-700/80 rounded-full pl-10 pr-4 py-1.5 text-xs text-white placeholder-gray-400 focus:outline-none focus:border-[#0F9D58] transition-all"
+              />
+            </div>
+            <div className="flex md:hidden items-center gap-1.5 text-xs font-bold text-gray-200">
+              <ShieldCheck className="w-4 h-4 text-[#0F9D58]" />
+              <span className="truncate max-w-[100px]">KlinaTop RH</span>
+            </div>
+          </>
         ) : (
-          <div className="flex items-center gap-2 text-xs font-semibold text-gray-300 shrink-0">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-gray-200 shrink-0">
             <ShieldCheck className="w-4 h-4 text-[#0F9D58]" />
-            <span>Portail d'entreprise KlinaTop</span>
+            <span className="truncate max-w-[110px] sm:max-w-none">KlinaTop</span>
           </div>
         )}
 
         {/* Center: Switcher (Dashboard RH / App Agent) + Refresh Button */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-gray-900/80 p-1 rounded-xl border border-gray-700/80">
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 bg-gray-900/90 p-0.5 sm:p-1 rounded-xl border border-gray-700/80">
             <button
               type="button"
               onClick={() => onModeChange('web')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                 currentMode === 'web'
                   ? 'bg-[#0F9D58] text-white shadow-sm'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800'
               }`}
             >
               <LayoutDashboard className="w-3.5 h-3.5" />
-              <span>Dashboard RH</span>
+              <span>Espace RH</span>
             </button>
 
             <button
               type="button"
               onClick={() => onModeChange('mobile')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                 currentMode === 'mobile'
                   ? 'bg-[#0F9D58] text-white shadow-sm'
                   : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -110,33 +117,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             type="button"
             onClick={onResetData}
             title="Rafraîchir les données"
-            className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors text-xs cursor-pointer border border-gray-700/60"
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-xl transition-colors text-xs cursor-pointer border border-gray-700/60"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Right Section: Connected Admin Profile OR Non Connecté */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {isRhAuthenticated && currentAdmin && currentMode === 'web' ? (
-            <div className="flex items-center gap-3">
-              {/* Notification Bell with red badge */}
+            <div className="flex items-center gap-2">
+              {/* Notification Bell */}
               <button
                 type="button"
                 title="Notifications"
-                className="relative text-gray-300 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-800 cursor-pointer"
+                className="relative text-gray-300 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-800 cursor-pointer hidden sm:block"
               >
                 <Bell className="w-4 h-4" />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-[#1F2937]"></span>
-              </button>
-
-              {/* Messages Mail icon */}
-              <button
-                type="button"
-                title="Messages"
-                className="text-gray-300 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-gray-800 cursor-pointer hidden sm:block"
-              >
-                <Mail className="w-4 h-4" />
               </button>
 
               {/* Round Profile Avatar with Dropdown */}
@@ -145,7 +143,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   type="button"
                   onClick={() => setShowProfileMenu(!showProfileMenu)}
                   title="Mon profil Administrateur"
-                  className="w-9 h-9 rounded-full overflow-hidden border-2 border-[#0F9D58] shadow-md bg-gray-900 shrink-0 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-emerald-400/50 transition-all"
+                  className="w-8 h-8 sm:w-9 sm:h-9 rounded-full overflow-hidden border-2 border-[#0F9D58] shadow-md bg-gray-900 shrink-0 flex items-center justify-center cursor-pointer hover:ring-2 hover:ring-emerald-400/50 transition-all"
                 >
                   {adminPhoto ? (
                     <img src={adminPhoto} alt={adminName} className="w-full h-full object-cover" />
@@ -214,9 +212,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 px-3 py-1 bg-gray-900/60 rounded-full border border-gray-800 text-[11px] text-gray-400">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-900/60 rounded-full border border-gray-800 text-[10px] sm:text-[11px] text-gray-400">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-              <span>Non connecté</span>
+              <span className="hidden sm:inline">Non connecté</span>
             </div>
           )}
         </div>
@@ -224,3 +222,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+
