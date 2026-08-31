@@ -1,15 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Lock, User as UserIcon, Eye, EyeOff, ArrowRight, Phone, Mail, UserPlus, CheckCircle2, AlertCircle, KeyRound, ArrowLeft, Camera, Upload, RefreshCw, X, SwitchCamera } from 'lucide-react';
-import { User } from '../../types';
+import { User, RhAdminUser } from '../../types';
+import { checkEmailConflict, initialAdmins } from '../../lib/firestoreService';
 import logoImg from '../../assets/images/klinatop_logo_1786547596570.jpg';
 
 interface MobileLoginProps {
   onLogin: (agent: User) => void;
   onRegisterAgent?: (newUser: User) => void;
   availableAgents: User[];
+  availableAdmins?: RhAdminUser[];
+  onSwitchToRhPortal?: () => void;
 }
 
-export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAgent, availableAgents }) => {
+export const MobileLogin: React.FC<MobileLoginProps> = ({
+  onLogin,
+  onRegisterAgent,
+  availableAgents,
+  availableAdmins = initialAdmins,
+  onSwitchToRhPortal,
+}) => {
   const [mode, setMode] = useState<'login' | 'register' | 'forgot_password'>('login');
 
   // Login state
@@ -19,7 +28,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
   const [rememberMe, setRememberMe] = useState(true);
 
   // Field error flags for visual red border highlighting
-  const [errorField, setErrorField] = useState<'identifier' | 'password' | 'regNom' | 'regPhone' | 'regPassword' | 'forgotQuery' | null>(null);
+  const [errorField, setErrorField] = useState<'identifier' | 'password' | 'regNom' | 'regPhone' | 'regEmail' | 'regPassword' | 'forgotQuery' | null>(null);
 
   // Register state for Cleaning Agent (Agent d'entretien)
   const [regNom, setRegNom] = useState('');
@@ -62,6 +71,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     setErrorMsg('');
     setCameraError(null);
 
+    // Stop existing stream first
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => {
         try {
@@ -72,6 +82,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     }
 
     try {
+      // First try with explicit ideal constraints
       let s: MediaStream;
       try {
         s = await navigator.mediaDevices.getUserMedia({
@@ -83,6 +94,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
           audio: false,
         });
       } catch (err1) {
+        // Fallback: try generic video constraint if exact facingMode failed
         s = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false,
@@ -108,12 +120,14 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     }
   };
 
+  // Toggle between front and rear camera
   const toggleCameraFacing = async () => {
     const nextFacing = cameraFacing === 'user' ? 'environment' : 'user';
     setCameraFacing(nextFacing);
     await startRegCamera(nextFacing);
   };
 
+  // Stop camera on component unmount or mode switch
   useEffect(() => {
     return () => {
       stopRegCamera();
@@ -132,6 +146,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       canvas.height = 400;
       const ctx = canvas.getContext('2d');
       if (ctx) {
+        // If front camera, mirror image for natural selfie result
         if (cameraFacing === 'user') {
           ctx.translate(400, 0);
           ctx.scale(-1, 1);
@@ -174,6 +189,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     reader.readAsDataURL(file);
   };
 
+  // 1. Authentification stricte de l'agent
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -195,6 +211,21 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       return;
     }
 
+    // Vérifier d'abord si l'utilisateur essaie de se connecter avec un compte Administrateur RH
+    const allAdmins = [...availableAdmins, ...initialAdmins];
+    const matchedAdmin = allAdmins.find((a) => {
+      const matchEmail = (a.email || '').toLowerCase() === cleanInput;
+      const matchPhone = (a.telephone || '').replace(/\s+/g, '').includes(cleanInput.replace(/\s+/g, ''));
+      return matchEmail || matchPhone;
+    });
+
+    if (matchedAdmin) {
+      setErrorField('identifier');
+      setErrorMsg(`⚠️ L'identifiant « ${identifier.trim()} » correspond à un compte Administrateur RH (KlinaTop). Veuillez vous connecter depuis l'Espace RH.`);
+      return;
+    }
+
+    // Recherche de l'agent dans la base
     const matchedAgent = availableAgents.find((a) => {
       const matchPhone = (a.telephone || '').replace(/\s+/g, '').includes(cleanInput.replace(/\s+/g, ''));
       const matchEmail = (a.email || '').toLowerCase() === cleanInput;
@@ -221,7 +252,8 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     }, 500);
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  // 2. Inscription d'un nouvel agent avec photo
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setErrorField(null);
@@ -230,6 +262,8 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     const cleanNom = regNom.trim();
     const cleanPhone = regPhone.trim();
     const cleanPass = regPassword.trim();
+    const cleanEmail = regEmail.trim().toLowerCase();
+    const finalEmail = cleanEmail || `${cleanNom.toLowerCase().replace(/\s+/g, '.')}@klinatop.bj`;
 
     if (!cleanNom) {
       setErrorField('regNom');
@@ -249,7 +283,45 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       return;
     }
 
+    // 1. Check if email belongs to an Admin (RH)
+    const allAdmins = [...availableAdmins, ...initialAdmins];
+    const isAdminEmail = allAdmins.some((a) => (a.email || '').toLowerCase() === finalEmail);
+    if (isAdminEmail) {
+      setErrorField('regEmail');
+      setErrorMsg("Cette adresse email est réservée à un compte Administrateur RH (KlinaTop). Un agent de terrain ne peut jamais créer un compte avec l'adresse d'un administrateur.");
+      return;
+    }
+
+    // 2. Check if phone is already registered for an agent
+    const isPhoneTaken = availableAgents.some((a) => (a.telephone || '').replace(/\s+/g, '') === cleanPhone.replace(/\s+/g, ''));
+    if (isPhoneTaken) {
+      setErrorField('regPhone');
+      setErrorMsg("Un compte agent existe déjà avec ce numéro de téléphone. Veuillez vous connecter.");
+      return;
+    }
+
+    // 3. Check if email is already taken by another agent
+    const isAgentEmailTaken = availableAgents.some((a) => (a.email || '').toLowerCase() === finalEmail);
+    if (isAgentEmailTaken) {
+      setErrorField('regEmail');
+      setErrorMsg("Un agent de terrain est déjà enregistré avec cette adresse email.");
+      return;
+    }
+
     setIsSubmitting(true);
+
+    try {
+      // 4. Remote Firestore conflict check
+      const conflict = await checkEmailConflict(finalEmail, 'agent');
+      if (!conflict.allowed) {
+        setIsSubmitting(false);
+        setErrorField('regEmail');
+        setErrorMsg(conflict.reason || "Conflit d'adresse email.");
+        return;
+      }
+    } catch (err: any) {
+      console.warn('Conflict check warning:', err);
+    }
 
     const parts = cleanNom.split(' ');
     const initials = parts.length > 1
@@ -265,7 +337,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
       equipeNom: regEquipe,
       statut: 'Actif',
       telephone: cleanPhone,
-      email: regEmail.trim() || `${cleanNom.toLowerCase().replace(/\s+/g, '.')}@klinatop.bj`,
+      email: finalEmail,
       photoUrl: regPhoto || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200`,
       initiales: initials,
       motDePasse: cleanPass,
@@ -284,6 +356,7 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
     }, 500);
   };
 
+  // 3. Récupération mot de passe
   const handleForgotSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -369,9 +442,21 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
 
       {/* Alert Messages */}
       {errorMsg && (
-        <div className="mb-2.5 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-rose-700 text-xs animate-shake">
-          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
-          <p className="font-medium leading-relaxed">{errorMsg}</p>
+        <div className="mb-2.5 p-3 bg-rose-50 border border-rose-200 rounded-2xl space-y-2 text-rose-700 text-xs animate-shake">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+            <p className="font-medium leading-relaxed">{errorMsg}</p>
+          </div>
+          {onSwitchToRhPortal && errorMsg.includes('Administrateur RH') && (
+            <button
+              type="button"
+              onClick={onSwitchToRhPortal}
+              className="w-full py-2 bg-[#1F2937] hover:bg-black text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>Basculer vers l'Espace RH Administrateur</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       )}
 
@@ -769,11 +854,32 @@ export const MobileLogin: React.FC<MobileLoginProps> = ({ onLogin, onRegisterAge
         </div>
       )}
 
-      {/* 6. Footer Support */}
-      <div className="text-center pt-2 pb-1">
-        <p className="text-[11px] text-gray-500 font-medium">
-          Assistance technique KlinaTop RH : <strong className="text-[#0F9D58] font-bold">+229 01 97 00 00</strong>
-        </p>
+      {/* 6. Switch to RH Portal & Footer Support */}
+      <div className="pt-2 pb-1 space-y-2">
+        {onSwitchToRhPortal && (
+          <button
+            type="button"
+            onClick={onSwitchToRhPortal}
+            className="w-full py-2.5 px-3 bg-white hover:bg-gray-50 border border-gray-200 hover:border-gray-300 rounded-2xl flex items-center justify-between text-xs font-semibold text-gray-700 transition-all shadow-xs cursor-pointer"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-emerald-50 text-[#0F9D58] flex items-center justify-center font-bold text-[10px]">
+                RH
+              </div>
+              <div className="text-left">
+                <span className="block font-bold text-gray-800 text-[11px]">Vous êtes Administrateur RH ?</span>
+                <span className="block text-[10px] text-gray-500 font-normal">Accéder au Dashboard d'administration</span>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-emerald-600 shrink-0" />
+          </button>
+        )}
+
+        <div className="text-center">
+          <p className="text-[11px] text-gray-500 font-medium">
+            Assistance technique KlinaTop RH : <strong className="text-[#0F9D58] font-bold">+229 01 97 00 00</strong>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -206,6 +206,10 @@ export async function addPointageToFirestore(pointage: Pointage, presenceUpdate?
 // 6. Register a new user in Firestore
 export async function registerUserInFirestore(user: User) {
   try {
+    const conflictCheck = await checkEmailConflict(user.email, 'agent');
+    if (!conflictCheck.allowed) {
+      throw new Error(conflictCheck.reason || 'Conflit d\'adresse email');
+    }
     await setDoc(doc(db, USERS_COLLECTION, user.id), sanitizeForFirestore(user));
   } catch (error) {
     console.error('Error registering user in Firestore:', error);
@@ -234,6 +238,93 @@ export async function deleteUserFromFirestore(userId: string) {
   }
 }
 
+// 6d. Strict verification to prevent duplicate emails across Admin and Agent roles
+export async function checkEmailConflict(
+  email: string,
+  targetRole: 'admin' | 'agent'
+): Promise<{ allowed: boolean; reason?: string }> {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return { allowed: true };
+
+  try {
+    // 1. Check in Admins collection
+    const adminsSnap = await getDocs(collection(db, ADMINS_COLLECTION));
+    let existsInAdmins = false;
+    adminsSnap.forEach((doc) => {
+      const data = doc.data() as RhAdminUser;
+      if (data.email && data.email.trim().toLowerCase() === cleanEmail) {
+        existsInAdmins = true;
+      }
+    });
+
+    if (!existsInAdmins) {
+      if (initialAdmins.some((a) => (a.email || '').trim().toLowerCase() === cleanEmail)) {
+        existsInAdmins = true;
+      }
+    }
+
+    // 2. Check in Users (Agents de terrain) collection
+    const usersSnap = await getDocs(collection(db, USERS_COLLECTION));
+    let existsInAgents = false;
+    usersSnap.forEach((doc) => {
+      const data = doc.data() as User;
+      if (data.email && data.email.trim().toLowerCase() === cleanEmail) {
+        existsInAgents = true;
+      }
+    });
+
+    if (!existsInAgents) {
+      if (initialUsers.some((u) => (u.email || '').trim().toLowerCase() === cleanEmail)) {
+        existsInAgents = true;
+      }
+    }
+
+    if (targetRole === 'admin') {
+      if (existsInAdmins) {
+        return {
+          allowed: false,
+          reason: "Un compte Administrateur RH existe déjà avec cette adresse email. Veuillez vous connecter.",
+        };
+      }
+      if (existsInAgents) {
+        return {
+          allowed: false,
+          reason: "Cette adresse email est déjà attribuée à un Agent de terrain. Un compte Administrateur RH ne peut jamais être créé avec l'adresse d'un agent de terrain.",
+        };
+      }
+    } else if (targetRole === 'agent') {
+      if (existsInAdmins) {
+        return {
+          allowed: false,
+          reason: "Cette adresse email est réservée à un compte Administrateur RH (Direction KlinaTop). Un agent de terrain ne peut jamais être créé avec l'adresse d'un administrateur.",
+        };
+      }
+      if (existsInAgents) {
+        return {
+          allowed: false,
+          reason: "Un compte Agent de terrain existe déjà avec cette adresse email.",
+        };
+      }
+    }
+
+    return { allowed: true };
+  } catch (err) {
+    console.error('Error checking email conflict in Firestore:', err);
+    // Fallback check against in-memory baseline
+    const existsInAdmins = initialAdmins.some((a) => (a.email || '').trim().toLowerCase() === cleanEmail);
+    const existsInAgents = initialUsers.some((u) => (u.email || '').trim().toLowerCase() === cleanEmail);
+
+    if (targetRole === 'admin') {
+      if (existsInAdmins) return { allowed: false, reason: "Un compte Administrateur RH existe déjà avec cette adresse email." };
+      if (existsInAgents) return { allowed: false, reason: "Cette adresse email est déjà attribuée à un Agent de terrain." };
+    } else {
+      if (existsInAdmins) return { allowed: false, reason: "Cette adresse email est réservée à un compte Administrateur RH." };
+      if (existsInAgents) return { allowed: false, reason: "Un compte Agent de terrain existe déjà avec cette adresse email." };
+    }
+    return { allowed: true };
+  }
+}
+
 // 7. Admins real-time listener
 export function subscribeToAdmins(callback: (admins: RhAdminUser[]) => void) {
   const q = query(collection(db, ADMINS_COLLECTION));
@@ -256,6 +347,10 @@ export function subscribeToAdmins(callback: (admins: RhAdminUser[]) => void) {
 // 8. Register or update an Admin in Firestore
 export async function registerAdminInFirestore(admin: RhAdminUser) {
   try {
+    const conflictCheck = await checkEmailConflict(admin.email, 'admin');
+    if (!conflictCheck.allowed) {
+      throw new Error(conflictCheck.reason || 'Conflit d\'adresse email');
+    }
     await setDoc(doc(db, ADMINS_COLLECTION, admin.id), sanitizeForFirestore(admin));
   } catch (error) {
     console.error('Error registering admin in Firestore:', error);
@@ -283,6 +378,7 @@ export async function authenticateAdminInFirestore(
   const cleanPass = enteredPassword.trim();
 
   try {
+    // Query Firestore admins collection
     const adminsSnap = await getDocs(collection(db, ADMINS_COLLECTION));
     let matchedAdmin: RhAdminUser | null = null;
 
@@ -295,13 +391,16 @@ export async function authenticateAdminInFirestore(
       });
     }
 
+    // If not yet in Firestore, check initial default admins list
     if (!matchedAdmin) {
       const defaultMatch = initialAdmins.find((a) => (a.email || '').toLowerCase() === cleanEmail);
       if (defaultMatch) {
         matchedAdmin = defaultMatch;
         try {
           await setDoc(doc(db, ADMINS_COLLECTION, defaultMatch.id), defaultMatch, { merge: true });
-        } catch {}
+        } catch {
+          // ignore setDoc error
+        }
       }
     }
 
@@ -312,6 +411,7 @@ export async function authenticateAdminInFirestore(
       };
     }
 
+    // Strict password verification
     const expectedPassword = (matchedAdmin as RhAdminUser).motDePasse || 'admin123';
     if (cleanPass !== expectedPassword) {
       return {
@@ -326,11 +426,12 @@ export async function authenticateAdminInFirestore(
     };
   } catch (error) {
     console.error('Authentication check error:', error);
+    // Fallback: check against initial admins
     const defaultMatch = initialAdmins.find((a) => (a.email || '').toLowerCase() === cleanEmail);
     if (!defaultMatch) {
       return {
         success: false,
-        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email."
+        error: "Aucun compte Administrateur n'est enregistré avec cette adresse email. Veuillez d'abord créer votre compte via l'onglet « Créer un compte RH » avec le Code d'Autorisation fourni par le Directeur Général."
       };
     }
     if (cleanPass !== (defaultMatch.motDePasse || 'admin123')) {

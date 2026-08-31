@@ -16,17 +16,20 @@ import {
   Send,
   RefreshCw,
   Edit3,
-  ExternalLink
+  ExternalLink,
+  Smartphone
 } from 'lucide-react';
 import { KlinaTopLogo } from '../common/KlinaTopLogo';
-import { RhAdminUser } from '../../types';
-import { initialAdmins, registerAdminInFirestore, authenticateAdminInFirestore } from '../../lib/firestoreService';
+import { User as UserType, RhAdminUser } from '../../types';
+import { initialAdmins, registerAdminInFirestore, authenticateAdminInFirestore, checkEmailConflict } from '../../lib/firestoreService';
 import { auth } from '../../lib/firebase';
 import { createUserWithEmailAndPassword, sendEmailVerification, signInWithEmailAndPassword } from 'firebase/auth';
 
 interface RhLoginViewProps {
   onLoginSuccess: (admin: RhAdminUser) => void;
   availableAdmins?: RhAdminUser[];
+  allUsers?: UserType[];
+  onSwitchToAgentApp?: () => void;
 }
 
 const VALID_DIRECTOR_CODES = [
@@ -38,7 +41,12 @@ const VALID_DIRECTOR_CODES = [
   '2026'
 ];
 
-export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availableAdmins = initialAdmins }) => {
+export const RhLoginView: React.FC<RhLoginViewProps> = ({
+  onLoginSuccess,
+  availableAdmins = initialAdmins,
+  allUsers = [],
+  onSwitchToAgentApp,
+}) => {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   
   // États connexion
@@ -209,9 +217,16 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     }
 
     const allKnown = [...availableAdmins, ...initialAdmins];
-    const existing = allKnown.find((a) => a.email && a.email.toLowerCase() === cleanEmail);
-    if (existing) {
+    const existingAdmin = allKnown.find((a) => a.email && a.email.toLowerCase() === cleanEmail);
+    if (existingAdmin) {
       setErrorMsg('Un compte Administrateur existe déjà avec cette adresse email. Veuillez vous connecter.');
+      return;
+    }
+
+    // Check if email already belongs to a field agent (in local state or Firestore)
+    const existingAgent = allUsers.find((u) => u.email && u.email.toLowerCase() === cleanEmail);
+    if (existingAgent) {
+      setErrorMsg("Cette adresse email est déjà attribuée à un Agent de terrain. Un compte Administrateur RH ne peut jamais être créé avec l'adresse d'un agent.");
       return;
     }
 
@@ -224,6 +239,14 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
     setIsLoading(true);
 
     try {
+      // Async validation against Firestore
+      const conflict = await checkEmailConflict(cleanEmail, 'admin');
+      if (!conflict.allowed) {
+        setIsLoading(false);
+        setErrorMsg(conflict.reason || "Conflit d'adresse email détecté.");
+        return;
+      }
+
       await sendRealEmailCode(cleanEmail, registerName.trim(), registerPassword.trim());
       setIsLoading(false);
       setIsVerifyingEmail(true);
@@ -395,7 +418,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                     setPassword(e.target.value);
                     setErrorMsg('');
                   }}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] transition-all"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] focus:ring-1 focus:ring-[#0F9D58] transition-all"
                   placeholder="••••••••"
                   required
                 />
@@ -455,7 +478,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                   value={registerName}
                   onChange={(e) => setRegisterName(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] transition-all"
-                  placeholder="ex: fadou leon"
+                  placeholder="ex: Koffi Fadou Léon"
                   required
                 />
               </div>
@@ -489,7 +512,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                   value={registerEmail}
                   onChange={(e) => setRegisterEmail(e.target.value)}
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#0F9D58] transition-all"
-                  placeholder="ex: leonkoffifadou@gmail.com"
+                  placeholder="ex: direction@klinatop.bj"
                   required
                 />
               </div>
@@ -532,7 +555,7 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
                 value={directorCode}
                 onChange={(e) => setDirectorCode(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white font-mono uppercase tracking-wider placeholder-gray-500 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 transition-all"
-                placeholder="Code fourni par le Directeur (ex: KT2026)"
+                placeholder="Code fourni par le Directeur (ex: KLINATOP-2026)"
                 required
               />
               <p className="text-[10px] text-gray-400">
@@ -664,6 +687,20 @@ export const RhLoginView: React.FC<RhLoginViewProps> = ({ onLoginSuccess, availa
               </div>
             </div>
           </form>
+        )}
+
+        {/* Passerelle directe vers l'Application Mobile Agent */}
+        {onSwitchToAgentApp && (
+          <div className="pt-4 mt-4 border-t border-gray-800 text-center">
+            <button
+              type="button"
+              onClick={onSwitchToAgentApp}
+              className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:underline cursor-pointer bg-gray-900/60 hover:bg-gray-900 px-4 py-2 rounded-xl border border-gray-700/60 transition-all"
+            >
+              <Smartphone className="w-4 h-4 text-[#0F9D58]" />
+              <span>Accéder à l'Espace Agent de Terrain (Pointage Mobile) →</span>
+            </button>
+          </div>
         )}
       </div>
     </div>

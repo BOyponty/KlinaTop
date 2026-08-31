@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, History, UserCheck, Smartphone } from 'lucide-react';
-import { User, Presence, Pointage } from '../../types';
+import { Home, History, User as UserIcon, Wifi, Battery, Signal } from 'lucide-react';
+import { User, Presence, Pointage, RhAdminUser } from '../../types';
+import { MobileLogin } from './MobileLogin';
 import { MobileCheckIn } from './MobileCheckIn';
 import { MobileCheckOut } from './MobileCheckOut';
 import { MobileHistory } from './MobileHistory';
 import { MobileProfile } from './MobileProfile';
-import { MobileLogin } from './MobileLogin';
 
 export type MobileTab = 'home' | 'history' | 'profile';
 
 interface MobileAppContainerProps {
   currentAgent: User | null;
   allAgents: User[];
+  allAdmins?: RhAdminUser[];
   presences: Presence[];
   pointages: Pointage[];
   onPerformCheckIn: (photoUrl: string, address: string, coords?: { lat: number; lng: number }) => void;
@@ -24,12 +25,14 @@ interface MobileAppContainerProps {
   onRegisterNewAgent?: (newUser: User) => void;
   onSelectAgent?: (agent: User | null) => void;
   onUpdateAgentPhoto?: (userId: string, photoUrl: string) => Promise<void> | void;
+  onSwitchToRhPortal?: () => void;
   isNativeMobile?: boolean;
 }
 
 export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   currentAgent,
   allAgents,
+  allAdmins = [],
   presences,
   pointages,
   onPerformCheckIn,
@@ -42,88 +45,65 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   onRegisterNewAgent,
   onSelectAgent,
   onUpdateAgentPhoto,
+  onSwitchToRhPortal,
   isNativeMobile = false,
 }) => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
     try {
-      const savedUser = localStorage.getItem('klinatop_logged_agent_user');
       const savedId = localStorage.getItem('klinatop_logged_agent_id');
-      return !!(savedUser || savedId);
+      return !!savedId;
     } catch {
       return false;
     }
   });
 
-  const [currentTime, setCurrentTime] = useState<string>('');
-
+  // Sync login and agent state when Firestore finishes loading
   useEffect(() => {
-    const update = () => {
-      const now = new Date();
-      setCurrentTime(
-        now.toLocaleTimeString('fr-FR', {
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: false,
-        })
-      );
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
+    try {
+      const savedUserStr = localStorage.getItem('klinatop_logged_agent_user');
+      const savedId = localStorage.getItem('klinatop_logged_agent_id');
+      const targetId = (savedUserStr ? JSON.parse(savedUserStr)?.id : null) || savedId;
+      if (targetId) {
+        setIsLoggedIn(true);
+        if (allAgents && allAgents.length > 0) {
+          const found = allAgents.find((a) => a.id === targetId);
+          if (found && onSelectAgent) {
+            onSelectAgent(found);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Sync session error', e);
+    }
+  }, [allAgents, onSelectAgent]);
   const [activeTab, setActiveTab] = useState<MobileTab>('home');
   const [subView, setSubView] = useState<'checkin' | 'checkout'>('checkin');
 
   if (!isLoggedIn || !currentAgent) {
     return (
-      <div
-        className={
-          isNativeMobile
-            ? 'w-full min-h-screen bg-[#F5F7FA] flex flex-col font-poppins'
-            : 'w-full max-w-[390px] h-[780px] bg-[#F5F7FA] rounded-[45px] shadow-2xl border-[8px] border-[#1F2937] overflow-hidden flex flex-col relative font-poppins'
-        }
-      >
-        {/* Status Bar */}
-        <div className="bg-[#1F2937] text-white px-6 pt-3 pb-2 flex items-center justify-between text-xs select-none shrink-0">
-          <span className="font-semibold">{currentTime || '08:15'}</span>
-          <div className="w-20 h-4 bg-black rounded-full mx-auto" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-emerald-400 font-bold">4G</span>
-            <div className="w-5 h-2.5 border border-white/80 rounded-xs p-0.5 flex items-center">
-              <div className="w-full h-full bg-emerald-400 rounded-2xs" />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto flex flex-col">
-          <MobileLogin
-            allAgents={allAgents}
-            onLoginSuccess={(agent) => {
-              try {
-                localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(agent));
-                localStorage.setItem('klinatop_logged_agent_id', agent.id);
-              } catch (e) {}
-              if (onSelectAgent) {
-                onSelectAgent(agent);
-              }
-              setIsLoggedIn(true);
-            }}
-            onRegisterNewAgent={(newAgent) => {
-              try {
-                localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(newAgent));
-                localStorage.setItem('klinatop_logged_agent_id', newAgent.id);
-              } catch (e) {}
-              if (onRegisterNewAgent) {
-                onRegisterNewAgent(newAgent);
-              }
-              if (onSelectAgent) {
-                onSelectAgent(newAgent);
-              }
-              setIsLoggedIn(true);
-            }}
-          />
-        </div>
+      <div className="w-full max-w-md mx-auto min-h-screen sm:min-h-[680px] sm:my-4 bg-[#F5F7FA] sm:rounded-3xl sm:shadow-xl sm:border border-gray-200 overflow-hidden flex flex-col font-poppins">
+        <MobileLogin
+          onLogin={(agent) => {
+            try {
+              localStorage.setItem('klinatop_logged_agent_id', agent.id);
+              localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(agent));
+            } catch (e) {}
+            if (onSelectAgent) onSelectAgent(agent);
+            setIsLoggedIn(true);
+          }}
+          onRegisterAgent={(newUser) => {
+            try {
+              localStorage.setItem('klinatop_logged_agent_id', newUser.id);
+              localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(newUser));
+            } catch (e) {}
+            if (onRegisterNewAgent) onRegisterNewAgent(newUser);
+            if (onSelectAgent) onSelectAgent(newUser);
+            setIsLoggedIn(true);
+          }}
+          availableAgents={allAgents}
+          availableAdmins={allAdmins}
+          onSwitchToRhPortal={onSwitchToRhPortal}
+        />
       </div>
     );
   }
@@ -131,105 +111,84 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
   const safeAgent: User = currentAgent;
 
   return (
-    <div
-      className={
-        isNativeMobile
-          ? 'w-full min-h-screen bg-[#F5F7FA] flex flex-col font-poppins relative'
-          : 'w-full max-w-[390px] h-[780px] bg-[#F5F7FA] rounded-[45px] shadow-2xl border-[8px] border-[#1F2937] overflow-hidden flex flex-col relative font-poppins'
-      }
-    >
-      {/* Mobile Top Status Bar */}
-      <div className="bg-[#1F2937] text-white px-6 pt-3 pb-2 flex items-center justify-between text-xs select-none shrink-0 z-20">
-        <span className="font-semibold">{currentTime || '08:15'}</span>
-        <div className="w-20 h-4 bg-black rounded-full mx-auto" />
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-emerald-400 font-bold">4G</span>
-          <div className="w-5 h-2.5 border border-white/80 rounded-xs p-0.5 flex items-center">
-            <div className="w-full h-full bg-emerald-400 rounded-2xs" />
+    <div className="w-full max-w-md mx-auto min-h-screen sm:min-h-[720px] sm:my-4 bg-[#F5F7FA] sm:rounded-3xl sm:shadow-xl sm:border border-gray-200 overflow-hidden relative flex flex-col font-poppins">
+      {/* Main Screen Content Area */}
+      <div className="flex-1 overflow-y-auto pb-20">
+        {activeTab === 'home' && (
+          <div>
+            {/* Toggle Switch between Check-in & Check-out in Mobile view */}
+            <div className="bg-white p-2 border-b border-gray-200 flex justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSubView('checkin')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  subView === 'checkin'
+                    ? 'bg-[#0F9D58] text-white shadow-xs'
+                    : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                1. Check-In (Arrivée)
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubView('checkout')}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  subView === 'checkout'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'text-gray-500 bg-gray-100 hover:bg-gray-200'
+                }`}
+              >
+                2. Check-Out (Fin)
+              </button>
+            </div>
+
+            {subView === 'checkin' ? (
+              <MobileCheckIn
+                agent={safeAgent}
+                onPerformCheckIn={onPerformCheckIn}
+                onOpenCameraModal={onOpenCameraModal}
+                photoCaptured={photoCaptured}
+                onGoToCheckoutScreen={() => setSubView('checkout')}
+                isCheckedIn={isCheckedIn}
+                onNavigateToProfile={() => setActiveTab('profile')}
+                onLogout={() => {
+                  try {
+                    localStorage.removeItem('klinatop_logged_agent_id');
+                    localStorage.removeItem('klinatop_logged_agent_user');
+                  } catch (e) {}
+                  setIsLoggedIn(false);
+                  if (onSelectAgent) onSelectAgent(null);
+                }}
+              />
+            ) : (
+              <MobileCheckOut
+                agent={safeAgent}
+                onPerformCheckOut={onPerformCheckOut}
+                onOpenCameraModal={onOpenCameraModal}
+                photoCaptured={photoCaptured}
+                checkInTime={checkInTime}
+              />
+            )}
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Check-In / Check-Out Toggle Bar */}
-      {activeTab === 'home' && (
-        <div className="bg-white px-4 py-2 border-b border-gray-100 flex items-center justify-center gap-2 shadow-2xs shrink-0">
-          <button
-            type="button"
-            onClick={() => setSubView('checkin')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              subView === 'checkin'
-                ? 'bg-[#0F9D58] text-white shadow-xs'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}
-          >
-            1. Check-In (Arrivée)
-          </button>
-          <button
-            type="button"
-            onClick={() => setSubView('checkout')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              subView === 'checkout'
-                ? 'bg-rose-600 text-white shadow-xs'
-                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}
-          >
-            2. Check-Out (Fin)
-          </button>
-        </div>
-      )}
-
-      {/* Main Screen Content */}
-      <div className="flex-1 overflow-y-auto relative flex flex-col">
-        {activeTab === 'home' ? (
-          subView === 'checkin' ? (
-            <MobileCheckIn
-              agent={safeAgent}
-              onPerformCheckIn={onPerformCheckIn}
-              onOpenCameraModal={onOpenCameraModal}
-              photoCaptured={photoCaptured}
-              isCheckedIn={isCheckedIn}
-              onGoToCheckoutScreen={() => setSubView('checkout')}
-              onLogout={() => {
-                try {
-                  localStorage.removeItem('klinatop_logged_agent_id');
-                  localStorage.removeItem('klinatop_logged_agent_user');
-                } catch (e) {}
-                setIsLoggedIn(false);
-                if (onSelectAgent) onSelectAgent(null);
-              }}
-              onNavigateToProfile={() => setActiveTab('profile')}
-            />
-          ) : (
-            <MobileCheckOut
-              agent={safeAgent}
-              onPerformCheckOut={onPerformCheckOut}
-              onOpenCameraModal={onOpenCameraModal}
-              photoCaptured={photoCaptured}
-              isCheckedIn={isCheckedIn}
-              checkInTime={checkInTime}
-              onGoToCheckinScreen={() => setSubView('checkin')}
-              onLogout={() => {
-                try {
-                  localStorage.removeItem('klinatop_logged_agent_id');
-                  localStorage.removeItem('klinatop_logged_agent_user');
-                } catch (e) {}
-                setIsLoggedIn(false);
-                if (onSelectAgent) onSelectAgent(null);
-              }}
-              onNavigateToProfile={() => setActiveTab('profile')}
-            />
-          )
-        ) : activeTab === 'history' ? (
+        {activeTab === 'history' && (
           <MobileHistory
-            agent={safeAgent}
+            agentId={safeAgent.id}
+            presences={presences}
             pointages={pointages}
             onInspectPhoto={onInspectPhoto}
           />
-        ) : (
+        )}
+
+        {activeTab === 'profile' && (
           <MobileProfile
             agent={safeAgent}
-            presences={presences}
-            onUpdatePhoto={onUpdateAgentPhoto}
+            onUpdatePhoto={async (newPhotoUrl) => {
+              if (onUpdateAgentPhoto && safeAgent.id) {
+                await onUpdateAgentPhoto(safeAgent.id, newPhotoUrl);
+              }
+            }}
             onLogout={() => {
               try {
                 localStorage.removeItem('klinatop_logged_agent_id');
@@ -242,39 +201,39 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
         )}
       </div>
 
-      {/* Bottom Floating Navigation Tabs */}
-      <nav className="absolute bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 px-6 py-2 flex items-center justify-around z-30 shadow-lg">
+      {/* Bottom Mobile Tab Bar */}
+      <nav className="absolute bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 px-6 py-2.5 flex justify-around items-center z-30 shadow-lg">
         <button
           type="button"
           onClick={() => setActiveTab('home')}
-          className={`flex flex-col items-center gap-1 transition-colors cursor-pointer ${
-            activeTab === 'home' ? 'text-[#0F9D58]' : 'text-gray-400 hover:text-gray-600'
+          className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+            activeTab === 'home' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
-          <Clock className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Pointer</span>
+          <Home className="w-5 h-5" />
+          <span className="text-[10px]">Accueil</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('history')}
-          className={`flex flex-col items-center gap-1 transition-colors cursor-pointer ${
-            activeTab === 'history' ? 'text-[#0F9D58]' : 'text-gray-400 hover:text-gray-600'
+          className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+            activeTab === 'history' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
           <History className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Historique</span>
+          <span className="text-[10px]">Historique</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center gap-1 transition-colors cursor-pointer ${
-            activeTab === 'profile' ? 'text-[#0F9D58]' : 'text-gray-400 hover:text-gray-600'
+          className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
+            activeTab === 'profile' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
         >
-          <UserCheck className="w-5 h-5" />
-          <span className="text-[10px] font-bold">Profil</span>
+          <UserIcon className="w-5 h-5" />
+          <span className="text-[10px]">Profil</span>
         </button>
       </nav>
     </div>

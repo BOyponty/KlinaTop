@@ -45,7 +45,7 @@ import {
 
 export default function App() {
   const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>('web');
-
+  
   // RH Administrator multi-user state with localStorage persistence
   const [admins, setAdmins] = useState<RhAdminUser[]>(initialAdmins);
   const [currentAdmin, setCurrentAdmin] = useState<RhAdminUser | null>(() => {
@@ -81,9 +81,6 @@ export default function App() {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768;
       setIsSmallScreen(isMobile);
-      if (isMobile) {
-        setCurrentMode('mobile');
-      }
     };
 
     handleResize();
@@ -107,6 +104,10 @@ export default function App() {
             if (targetId) {
               const savedMatch = firestoreUsers.find((u) => u.id === targetId);
               if (savedMatch) {
+                try {
+                  localStorage.setItem('klinatop_logged_agent_user', JSON.stringify(savedMatch));
+                  localStorage.setItem('klinatop_logged_agent_id', savedMatch.id);
+                } catch (e) {}
                 return savedMatch;
               }
             }
@@ -137,6 +138,7 @@ export default function App() {
     const unsubAdmins = subscribeToAdmins((firestoreAdmins) => {
       if (firestoreAdmins.length > 0) {
         setAdmins(firestoreAdmins);
+        // Update currentAdmin if matching
         setCurrentAdmin((curr) => {
           if (!curr) return null;
           const currEmail = (curr.email || '').toLowerCase();
@@ -215,9 +217,8 @@ export default function App() {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
-
-    const latVal = coords?.lat || 6.3774;
-    const lngVal = coords?.lng || 2.3903;
+    const lat = coords?.lat ?? 6.3774;
+    const lng = coords?.lng ?? 2.3903;
 
     const newPointage: Pointage = {
       id: `ptg-${Date.now()}`,
@@ -229,23 +230,27 @@ export default function App() {
       timestamp: now.toISOString(),
       formattedTime: timeStr,
       formattedDate: dateStr,
-      latitude: latVal,
-      longitude: lngVal,
+      latitude: lat,
+      longitude: lng,
       adresse: address || 'Avenue Jean Paul II, Cotonou, Bénin',
       siteName: 'Site KlinaTop Main',
       photoUrl,
     };
 
+    // Optimistic UI update
     setPointages((prev) => [newPointage, ...prev]);
 
     const presenceUpdate: Partial<Presence> = {
       heureCheckin: timeStr,
       adresseCheckin: address,
       photoCheckinUrl: photoUrl,
+      latCheckin: lat,
+      lngCheckin: lng,
       statut: 'en_poste',
       duree: 'En cours',
     };
 
+    // Update presence sheet locally
     setPresences((prev) => {
       const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
       if (existingIndex >= 0) {
@@ -267,6 +272,8 @@ export default function App() {
           heureCheckin: timeStr,
           adresseCheckin: address,
           photoCheckinUrl: photoUrl,
+          latCheckin: lat,
+          lngCheckin: lng,
           duree: 'En cours',
           dureeMinutes: 0,
           heureCheckout: null,
@@ -280,6 +287,7 @@ export default function App() {
     setCheckInTime(timeStr);
     setPhotoCaptured(null);
 
+    // Save to Cloud Firestore
     try {
       await addPointageToFirestore(newPointage, presenceUpdate);
     } catch (err) {
@@ -293,9 +301,8 @@ export default function App() {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
     const dateStr = now.toLocaleDateString('fr-FR');
-
-    const latVal = coords?.lat || 6.3774;
-    const lngVal = coords?.lng || 2.3903;
+    const lat = coords?.lat ?? 6.3774;
+    const lng = coords?.lng ?? 2.3903;
 
     const newPointage: Pointage = {
       id: `ptg-${Date.now()}`,
@@ -307,37 +314,41 @@ export default function App() {
       timestamp: now.toISOString(),
       formattedTime: timeStr,
       formattedDate: dateStr,
-      latitude: latVal,
-      longitude: lngVal,
-      adresse: address || 'Boulevard de la Marina, Cotonou, Bénin',
+      latitude: lat,
+      longitude: lng,
+      adresse: address || 'Site KlinaTop, Cotonou, Bénin',
       siteName: 'Site KlinaTop Main',
       photoUrl,
     };
 
+    // Optimistic UI update
     setPointages((prev) => [newPointage, ...prev]);
 
     const presenceUpdate: Partial<Presence> = {
       heureCheckout: timeStr,
-      statut: 'terminé',
-      duree: '8h 00m',
-      dureeMinutes: 480,
+      photoCheckoutUrl: photoUrl,
+      adresseCheckout: address,
+      duree: '8h 15m',
+      statut: 'présent',
     };
 
-    setPresences((prev) =>
-      prev.map((p) => {
-        if (p.userId === selectedAgent.id) {
-          return {
-            ...p,
-            ...presenceUpdate,
-          };
-        }
-        return p;
-      })
-    );
+    setPresences((prev) => {
+      const existingIndex = prev.findIndex((p) => p.userId === selectedAgent.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          ...presenceUpdate,
+        };
+        return updated;
+      }
+      return prev;
+    });
 
     setIsCheckedIn(false);
     setPhotoCaptured(null);
 
+    // Save to Cloud Firestore
     try {
       await addPointageToFirestore(newPointage, presenceUpdate);
     } catch (err) {
@@ -345,6 +356,7 @@ export default function App() {
     }
   };
 
+  // Employee CRUD handlers
   const handleAddEmployee = async (newEmp: User) => {
     setUsers((prev) => [newEmp, ...prev]);
     try {
@@ -384,9 +396,11 @@ export default function App() {
   };
 
   const handleUpdateAgentPhoto = async (userId: string, photoUrl: string) => {
+    // Update users list
     setUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, photoUrl } : u))
     );
+    // Update selected agent if matches
     setSelectedAgent((curr) => {
       if (curr && curr.id === userId) {
         const updated = { ...curr, photoUrl };
@@ -397,6 +411,7 @@ export default function App() {
       }
       return curr;
     });
+    // Persist to Cloud Firestore
     try {
       await updateUserInFirestore(userId, { photoUrl });
     } catch (err) {
@@ -408,7 +423,7 @@ export default function App() {
     if (window.confirm('Voulez-vous vraiment supprimer cet employé de la base KlinaTop ? Cette action supprimera définitivement le compte dans Firebase.')) {
       // Immediate local state update
       setUsers((prev) => prev.filter((u) => u.id !== userId));
-
+      
       // If deleted agent is currently logged into the mobile simulation, log them out
       if (selectedAgent && selectedAgent.id === userId) {
         handleSelectAgent(null);
@@ -456,29 +471,28 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-gray-900 font-poppins flex flex-col">
-      {/* Top Header Navbar */}
-      {!isSmallScreen && (
-        <Navbar
-          currentMode={currentMode}
-          onModeChange={(mode) => setCurrentMode(mode)}
-          onResetData={handleResetData}
-          onLogoutRH={handleLogoutRH}
-          onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
-          isRhAuthenticated={isRhAuthenticated}
-          currentAdmin={currentAdmin}
-        />
-      )}
+      {/* Top Header Navbar - Sleek and responsive on all devices */}
+      <Navbar
+        currentMode={currentMode}
+        onModeChange={(mode) => setCurrentMode(mode)}
+        onResetData={handleResetData}
+        onLogoutRH={handleLogoutRH}
+        onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
+        isRhAuthenticated={isRhAuthenticated}
+        currentAdmin={currentAdmin}
+      />
 
       {/* Main Mode Renderer */}
-      {currentMode === 'web' && !isSmallScreen ? (
+      {currentMode === 'web' ? (
         !isRhAuthenticated ? (
           <RhLoginView
             onLoginSuccess={handleRhLoginSuccess}
             availableAdmins={admins}
+            allUsers={users}
             onSwitchToAgentApp={() => setCurrentMode('mobile')}
           />
         ) : (
-          <div className="flex flex-1">
+          <div className="flex flex-1 flex-col md:flex-row">
             {/* Web Dashboard Left Sidebar */}
             <Sidebar
               activeTab={activeWebTab}
@@ -497,7 +511,7 @@ export default function App() {
                   users={users}
                   presences={presences}
                   pointages={pointages}
-                  onNavigate={(tab) => setActiveWebTab(tab as WebTab)}
+                  onNavigate={(tab) => setActiveWebTab(tab)}
                   onInspectPhoto={(ptg) => setInspectPointage(ptg)}
                 />
               )}
@@ -543,7 +557,7 @@ export default function App() {
           </div>
         )
       ) : (
-        /* Mobile Mode */
+        /* Mobile Mode (Edge-to-Edge on real mobile devices, Mockup on desktop) */
         <main
           className={
             isSmallScreen
@@ -554,6 +568,7 @@ export default function App() {
           <MobileAppContainer
             currentAgent={selectedAgent}
             allAgents={users}
+            allAdmins={admins}
             presences={presences}
             pointages={pointages}
             onPerformCheckIn={handlePerformCheckIn}
@@ -574,6 +589,7 @@ export default function App() {
             }}
             onSelectAgent={handleSelectAgent}
             onUpdateAgentPhoto={handleUpdateAgentPhoto}
+            onSwitchToRhPortal={() => setCurrentMode('web')}
             isNativeMobile={isSmallScreen}
           />
         </main>
@@ -592,6 +608,8 @@ export default function App() {
         onClose={() => setIsAddEmployeeModalOpen(false)}
         equipes={equipes}
         onAddEmployee={handleAddEmployee}
+        existingUsers={users}
+        existingAdmins={admins}
       />
 
       <CameraModal
