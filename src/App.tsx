@@ -188,8 +188,62 @@ export default function App() {
     };
   }, []);
 
-  // Web Navigation Tab
-  const [activeWebTab, setActiveWebTab] = useState<WebTab>('dashboard');
+  // Web Navigation Tab with URL Hash & LocalStorage persistence
+  const VALID_WEB_TABS: WebTab[] = [
+    'dashboard',
+    'employees',
+    'attendance',
+    'pointages',
+    'reports',
+    'payroll',
+    'settings',
+  ];
+
+  const [activeWebTab, setActiveWebTab] = useState<WebTab>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase() as WebTab;
+        if (VALID_WEB_TABS.includes(hash)) {
+          return hash;
+        }
+        const savedTab = localStorage.getItem('klinatop_active_web_tab') as WebTab;
+        if (VALID_WEB_TABS.includes(savedTab)) {
+          return savedTab;
+        }
+      } catch (e) {
+        console.warn('Error initializing activeWebTab', e);
+      }
+    }
+    return 'dashboard';
+  });
+
+  const handleSelectWebTab = (tab: WebTab) => {
+    setActiveWebTab(tab);
+    try {
+      localStorage.setItem('klinatop_active_web_tab', tab);
+      if (typeof window !== 'undefined' && window.location.hash !== `#${tab}`) {
+        window.history.replaceState(null, '', `#${tab}`);
+      }
+    } catch (e) {
+      console.error('Error saving active web tab', e);
+    }
+  };
+
+  // Sync with browser back/forward buttons (hashchange)
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '').toLowerCase() as WebTab;
+      if (VALID_WEB_TABS.includes(hash)) {
+        setActiveWebTab(hash);
+        try {
+          localStorage.setItem('klinatop_active_web_tab', hash);
+        } catch (e) {}
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   // Global Centralized State
   const [users, setUsers] = useState<User[]>(initialUsers);
@@ -535,7 +589,7 @@ export default function App() {
             {/* Web Dashboard Left Sidebar */}
             <Sidebar
               activeTab={activeWebTab}
-              onSelectTab={(tab) => setActiveWebTab(tab)}
+              onSelectTab={handleSelectWebTab}
               onOpenAddModal={() => setIsAddEmployeeModalOpen(true)}
               totalEmployeesCount={users.length}
               onLogoutRH={handleLogoutRH}
@@ -551,7 +605,7 @@ export default function App() {
                   users={users}
                   presences={presences}
                   pointages={pointages}
-                  onNavigate={(tab) => setActiveWebTab(tab)}
+                  onNavigate={handleSelectWebTab}
                   onInspectPhoto={(ptg) => setInspectPointage(ptg)}
                 />
               )}

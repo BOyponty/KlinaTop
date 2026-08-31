@@ -76,8 +76,39 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
       console.warn('Sync session error', e);
     }
   }, [allAgents, onSelectAgent]);
-  const [activeTab, setActiveTab] = useState<MobileTab>('home');
-  const [subView, setSubView] = useState<'checkin' | 'checkout'>('checkin');
+  const [activeTab, setActiveTab] = useState<MobileTab>(() => {
+    try {
+      const saved = localStorage.getItem('klinatop_mobile_active_tab') as MobileTab;
+      if (saved === 'home' || saved === 'history' || saved === 'profile') {
+        return saved;
+      }
+    } catch (e) {}
+    return 'home';
+  });
+
+  const [subView, setSubView] = useState<'checkin' | 'checkout'>(() => {
+    try {
+      const saved = localStorage.getItem('klinatop_mobile_subview');
+      if (saved === 'checkin' || saved === 'checkout') {
+        return saved;
+      }
+    } catch (e) {}
+    return 'checkin';
+  });
+
+  const handleSelectTab = (tab: MobileTab) => {
+    setActiveTab(tab);
+    try {
+      localStorage.setItem('klinatop_mobile_active_tab', tab);
+    } catch (e) {}
+  };
+
+  const handleSelectSubView = (sub: 'checkin' | 'checkout') => {
+    setSubView(sub);
+    try {
+      localStorage.setItem('klinatop_mobile_subview', sub);
+    } catch (e) {}
+  };
 
   if (!isLoggedIn || !currentAgent) {
     return (
@@ -120,7 +151,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
             <div className="bg-white p-2 border-b border-gray-200 flex justify-center gap-2">
               <button
                 type="button"
-                onClick={() => setSubView('checkin')}
+                onClick={() => handleSelectSubView('checkin')}
                 className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   subView === 'checkin'
                     ? 'bg-[#0F9D58] text-white shadow-xs'
@@ -131,7 +162,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setSubView('checkout')}
+                onClick={() => handleSelectSubView('checkout')}
                 className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                   subView === 'checkout'
                     ? 'bg-rose-600 text-white shadow-xs'
@@ -148,13 +179,15 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
                 onPerformCheckIn={onPerformCheckIn}
                 onOpenCameraModal={onOpenCameraModal}
                 photoCaptured={photoCaptured}
-                onGoToCheckoutScreen={() => setSubView('checkout')}
+                onGoToCheckoutScreen={() => handleSelectSubView('checkout')}
                 isCheckedIn={isCheckedIn}
-                onNavigateToProfile={() => setActiveTab('profile')}
+                onNavigateToProfile={() => handleSelectTab('profile')}
                 onLogout={() => {
                   try {
                     localStorage.removeItem('klinatop_logged_agent_id');
                     localStorage.removeItem('klinatop_logged_agent_user');
+                    localStorage.removeItem('klinatop_mobile_active_tab');
+                    localStorage.removeItem('klinatop_mobile_subview');
                   } catch (e) {}
                   setIsLoggedIn(false);
                   if (onSelectAgent) onSelectAgent(null);
@@ -193,6 +226,8 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
               try {
                 localStorage.removeItem('klinatop_logged_agent_id');
                 localStorage.removeItem('klinatop_logged_agent_user');
+                localStorage.removeItem('klinatop_mobile_active_tab');
+                localStorage.removeItem('klinatop_mobile_subview');
               } catch (e) {}
               setIsLoggedIn(false);
               if (onSelectAgent) onSelectAgent(null);
@@ -205,7 +240,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
       <nav className="absolute bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-gray-200 px-6 py-2.5 flex justify-around items-center z-30 shadow-lg">
         <button
           type="button"
-          onClick={() => setActiveTab('home')}
+          onClick={() => handleSelectTab('home')}
           className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
             activeTab === 'home' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
@@ -216,7 +251,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('history')}
+          onClick={() => handleSelectTab('history')}
           className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
             activeTab === 'history' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
@@ -227,7 +262,7 @@ export const MobileAppContainer: React.FC<MobileAppContainerProps> = ({
 
         <button
           type="button"
-          onClick={() => setActiveTab('profile')}
+          onClick={() => handleSelectTab('profile')}
           className={`flex flex-col items-center gap-1 transition-all cursor-pointer ${
             activeTab === 'profile' ? 'text-[#0F9D58] font-bold scale-105' : 'text-gray-400 hover:text-gray-600'
           }`}
