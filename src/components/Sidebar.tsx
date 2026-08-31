@@ -11,6 +11,8 @@ import {
   HelpCircle,
   LogOut,
   Camera,
+  Smartphone,
+  ShieldCheck,
 } from 'lucide-react';
 import logoImg from '../assets/images/klinatop_logo_1786547596570.jpg';
 import { RhAdminUser } from '../types';
@@ -32,6 +34,7 @@ interface SidebarProps {
   onLogoutRH?: () => void;
   currentAdmin?: RhAdminUser | null;
   onOpenRhProfileModal?: () => void;
+  onSwitchToAgentApp?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -42,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogoutRH,
   currentAdmin,
   onOpenRhProfileModal,
+  onSwitchToAgentApp,
 }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -63,7 +67,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   return (
-    <aside className="w-full md:w-64 bg-[#1B2533] text-gray-300 flex flex-col md:h-[calc(100vh-61px)] md:sticky top-[49px] sm:top-[57px] border-b md:border-b-0 md:border-r border-gray-800/80 shrink-0 select-none">
+    <aside className="w-full md:w-64 bg-[#1B2533] text-gray-300 flex flex-col md:h-[calc(100vh-61px)] md:sticky top-0 border-b md:border-b-0 md:border-r border-gray-800/80 shrink-0 select-none">
+      {/* Mobile Top Header for RH on smartphone (since desktop Navbar is hidden) */}
+      <div className="flex md:hidden items-center justify-between px-3.5 py-2.5 bg-[#141d29] border-b border-gray-800">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 bg-white rounded-lg p-0.5 shadow-xs flex items-center justify-center">
+            <img src={logoImg} alt="KlinaTop" className="w-full h-full object-contain" />
+          </div>
+          <div>
+            <span className="text-xs font-bold text-white block leading-tight">KlinaTop RH</span>
+            <span className="text-[10px] text-emerald-400 font-medium block leading-tight">{adminName}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onOpenAddModal}
+            className="p-1.5 bg-[#0F9D58] hover:bg-[#0c8047] text-white rounded-lg shadow-xs cursor-pointer"
+            title="Ajouter un employé"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+
+          {onSwitchToAgentApp && (
+            <button
+              onClick={onSwitchToAgentApp}
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-[11px] font-semibold border border-gray-700 cursor-pointer"
+              title="Basculer vers l'App Agent"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+              <span>App Agent</span>
+            </button>
+          )}
+
+          {onLogoutRH && (
+            <button
+              onClick={onLogoutRH}
+              className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-all cursor-pointer"
+              title="Déconnexion RH"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Brand Header inside Sidebar with official centered KlinaTop logo badge - desktop only */}
       <div className="hidden md:flex pt-5 pb-3 flex-col items-center justify-center">
         <div className="w-16 h-16 bg-white rounded-2xl p-1.5 shadow-md border border-gray-100 flex items-center justify-center transition-transform hover:scale-105">

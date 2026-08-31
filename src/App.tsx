@@ -44,7 +44,12 @@ import {
 } from './lib/firestoreService';
 
 export default function App() {
-  const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>('web');
+  const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return 'mobile';
+    }
+    return 'web';
+  });
   
   // RH Administrator multi-user state with localStorage persistence
   const [admins, setAdmins] = useState<RhAdminUser[]>(initialAdmins);
@@ -471,16 +476,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-gray-900 font-poppins flex flex-col">
-      {/* Top Header Navbar - Sleek and responsive on all devices */}
-      <Navbar
-        currentMode={currentMode}
-        onModeChange={(mode) => setCurrentMode(mode)}
-        onResetData={handleResetData}
-        onLogoutRH={handleLogoutRH}
-        onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
-        isRhAuthenticated={isRhAuthenticated}
-        currentAdmin={currentAdmin}
-      />
+      {/* Top Header Navbar - Only visible on desktop/laptop for simulation and preview */}
+      {!isSmallScreen && (
+        <Navbar
+          currentMode={currentMode}
+          onModeChange={(mode) => setCurrentMode(mode)}
+          onResetData={handleResetData}
+          onLogoutRH={handleLogoutRH}
+          onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
+          isRhAuthenticated={isRhAuthenticated}
+          currentAdmin={currentAdmin}
+        />
+      )}
 
       {/* Main Mode Renderer */}
       {currentMode === 'web' ? (
@@ -502,6 +509,7 @@ export default function App() {
               onLogoutRH={handleLogoutRH}
               currentAdmin={currentAdmin}
               onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
+              onSwitchToAgentApp={() => setCurrentMode('mobile')}
             />
 
             {/* Web Main Content Area */}
