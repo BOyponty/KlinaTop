@@ -12,7 +12,6 @@ import {
   LogOut,
   Camera,
   Smartphone,
-  ShieldCheck,
 } from 'lucide-react';
 import logoImg from '../assets/images/klinatop_logo_1786547596570.jpg';
 import { RhAdminUser } from '../types';
@@ -76,7 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <span className="text-xs font-bold text-white block leading-tight">KlinaTop RH</span>
-            <span className="text-[10px] text-emerald-400 font-medium block leading-tight">{adminName}</span>
+            <span className="text-[10px] text-emerald-400 font-medium block leading-tight truncate max-w-[120px]">{adminName}</span>
           </div>
         </div>
 
@@ -206,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={() => alert('Support RH KlinaTop: Contactez support@klinatop.bj ou le +229 01 00 00 00.')}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-gray-400 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
         >
           <HelpCircle className="w-4 h-4 text-gray-400" />
           <span className="font-poppins">Support</span>
@@ -214,7 +213,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <button
           onClick={onLogoutRH}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all active:scale-98"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all active:scale-98 cursor-pointer"
         >
           <LogOut className="w-4 h-4 text-red-400" />
           <span className="font-poppins">Logout</span>
@@ -223,4 +222,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </aside>
   );
 };
-

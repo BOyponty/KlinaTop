@@ -45,11 +45,35 @@ import {
 
 export default function App() {
   const [currentMode, setCurrentMode] = useState<'web' | 'mobile'>(() => {
+    try {
+      // 1. If RH admin is logged in, ALWAYS stay in RH web dashboard
+      const savedRhUser = localStorage.getItem('klinatop_logged_rh_user');
+      if (savedRhUser) {
+        return 'web';
+      }
+      // 2. If user specifically navigated to a mode and saved it
+      const savedMode = localStorage.getItem('klinatop_app_mode');
+      if (savedMode === 'web' || savedMode === 'mobile') {
+        return savedMode;
+      }
+    } catch (e) {
+      console.warn('Error reading mode from localStorage', e);
+    }
+    // 3. Fallback: mobile if screen is small, otherwise web
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       return 'mobile';
     }
     return 'web';
   });
+
+  const handleModeChange = (mode: 'web' | 'mobile') => {
+    setCurrentMode(mode);
+    try {
+      localStorage.setItem('klinatop_app_mode', mode);
+    } catch (e) {
+      console.error(e);
+    }
+  };
   
   // RH Administrator multi-user state with localStorage persistence
   const [admins, setAdmins] = useState<RhAdminUser[]>(initialAdmins);
@@ -457,21 +481,29 @@ export default function App() {
   const handleLogoutRH = () => {
     try {
       localStorage.removeItem('klinatop_logged_rh_user');
+      if (isSmallScreen) {
+        localStorage.setItem('klinatop_app_mode', 'mobile');
+      }
     } catch (e) {
       console.error(e);
     }
     setCurrentAdmin(null);
     setIsRhAuthenticated(false);
+    if (isSmallScreen) {
+      setCurrentMode('mobile');
+    }
   };
 
   const handleRhLoginSuccess = (admin: RhAdminUser) => {
     try {
       localStorage.setItem('klinatop_logged_rh_user', JSON.stringify(admin));
+      localStorage.setItem('klinatop_app_mode', 'web');
     } catch (e) {
       console.error(e);
     }
     setCurrentAdmin(admin);
     setIsRhAuthenticated(true);
+    setCurrentMode('web');
   };
 
   return (
@@ -480,7 +512,7 @@ export default function App() {
       {!isSmallScreen && (
         <Navbar
           currentMode={currentMode}
-          onModeChange={(mode) => setCurrentMode(mode)}
+          onModeChange={handleModeChange}
           onResetData={handleResetData}
           onLogoutRH={handleLogoutRH}
           onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
@@ -496,7 +528,7 @@ export default function App() {
             onLoginSuccess={handleRhLoginSuccess}
             availableAdmins={admins}
             allUsers={users}
-            onSwitchToAgentApp={() => setCurrentMode('mobile')}
+            onSwitchToAgentApp={() => handleModeChange('mobile')}
           />
         ) : (
           <div className="flex flex-1 flex-col md:flex-row">
@@ -509,7 +541,7 @@ export default function App() {
               onLogoutRH={handleLogoutRH}
               currentAdmin={currentAdmin}
               onOpenRhProfileModal={() => setIsRhProfileModalOpen(true)}
-              onSwitchToAgentApp={() => setCurrentMode('mobile')}
+              onSwitchToAgentApp={() => handleModeChange('mobile')}
             />
 
             {/* Web Main Content Area */}
@@ -597,7 +629,7 @@ export default function App() {
             }}
             onSelectAgent={handleSelectAgent}
             onUpdateAgentPhoto={handleUpdateAgentPhoto}
-            onSwitchToRhPortal={() => setCurrentMode('web')}
+            onSwitchToRhPortal={() => handleModeChange('web')}
             isNativeMobile={isSmallScreen}
           />
         </main>
